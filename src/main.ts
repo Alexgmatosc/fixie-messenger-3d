@@ -193,6 +193,8 @@ async function initApp(): Promise<void> {
     trackStandPhase: 0,
     lookYaw: 0,
     turnRateVel: 0,
+    weightBias: 0.12,
+    skidJitterPhase: 0,
     camPreset: '34' as '34' | 'rear' | 'fpv',
     camHeroYaw: 0.42,
     chaseView: true,
@@ -402,6 +404,8 @@ async function initApp(): Promise<void> {
       bikeState.wasSkidding = false;
       bikeState.lastSkidTurn = 0;
       bikeState.turnRateVel = 0;
+      bikeState.weightBias = 0.12;
+      bikeState.skidJitterPhase = 0;
       bikeState.camHeroYaw = 0.42;
       skidTrail.breakTrail();
       bikeState.camOrbitYaw = 0;
@@ -424,6 +428,7 @@ async function initApp(): Promise<void> {
           isSprinting: false,
           isSkidding: false,
           whipAngle: 0,
+          weightBias: 0.12,
           standBlend: 0.7,
           hopLiftM: 0,
           lookYaw: 0,
@@ -436,7 +441,7 @@ async function initApp(): Promise<void> {
       );
       flightModeLabel.textContent = 'Fixie (Calle)';
       flightHint.innerHTML =
-        '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> pedalear · <kbd>Espacio</kbd>+<kbd>A</kbd>/<kbd>D</kbd> hop-skid/bamboleo · <kbd>Shift</kbd> sprint · <kbd>R</kbd> rider · <kbd>C</kbd> cámara';
+        '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> pedalear · <kbd>Espacio</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> skid delante/sentado · <kbd>Shift</kbd> sprint · <kbd>R</kbd> rider · <kbd>C</kbd> cámara';
     } else {
       camera.fov = 48;
       camera.updateProjectionMatrix();
@@ -599,9 +604,8 @@ async function initApp(): Promise<void> {
       flightSpeedEl.textContent = `${(totalSpeed * 3.6).toFixed(0)} km/h`;
     } else {
       const sprint = keys.has('ShiftLeft') || keys.has('ShiftRight');
-      const forwardInput =
-        (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) -
-        (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
+      const forwardInput = (keys.has('KeyW') ? 1 : 0) - (keys.has('KeyS') ? 1 : 0);
+      const weightInput = (keys.has('ArrowUp') ? 1 : 0) - (keys.has('ArrowDown') ? 1 : 0);
       const turnInput =
         (keys.has('KeyA') || keys.has('ArrowLeft') || keys.has('KeyQ') ? 1 : 0) -
         (keys.has('KeyD') || keys.has('ArrowRight') || keys.has('KeyE') ? 1 : 0);
@@ -615,6 +619,15 @@ async function initApp(): Promise<void> {
       const preVForward = bikeState.velX * fwdX + bikeState.velZ * fwdZ;
       const isSkidding = skidInput && speedMag > 2.0 && preVForward > -0.5;
 
+      // Transferencia de peso con ↑ (adelantarse al manillar) y ↓ (quedarse sentado sobre la rueda trasera)
+      const defaultWeight = isSkidding ? 0.12 : sprint && forwardInput > 0 ? 0.55 : 0.0;
+      const weightTarget = weightInput !== 0 ? weightInput : defaultWeight;
+      const weightRate = weightInput !== 0 ? 8.5 : 5.5;
+      bikeState.weightBias += (weightTarget - bikeState.weightBias) * Math.min(1, dt * weightRate);
+      bikeState.weightBias = Math.max(-1, Math.min(1, bikeState.weightBias));
+      const forwardLean01 = Math.max(0, bikeState.weightBias);
+      const seated01 = Math.max(0, -bikeState.weightBias);
+
       // 1. Giro ágil a ritmo urbano (< ~41 km/h); al superar ~41 km/h entra el peso e inercia centrípeta real
       const highSpeedRatio = Math.max(0, Math.min(1, (speedMag - 11.4) / 5.4));
       const agileTurn = Math.max(1.45, 2.25 - speedMag * 0.06);
@@ -627,12 +640,19 @@ async function initApp(): Promise<void> {
 
       bikeState.turnRateVel +=
         (desiredTurnRate - bikeState.turnRateVel) * Math.min(1, dt * (isSkidding ? 15.0 : 12.0));
+
+      // Eje de rotación real en el parche de contacto de la rueda delantera (0.57 m delante del pedalier)
+      const FRONT_CONTACT_OFFSET = 0.57;
+      const frontContactX = freeState.x + fwdX * FRONT_CONTACT_OFFSET;
+      const frontContactZ = freeState.z + fwdZ * FRONT_CONTACT_OFFSET;
       freeState.yaw += bikeState.turnRateVel * dt;
 
       const nextDirX = -Math.sin(freeState.yaw);
       const nextDirZ = -Math.cos(freeState.yaw);
       const nextRightX = Math.cos(freeState.yaw);
       const nextRightZ = -Math.sin(freeState.yaw);
+      freeState.x = frontContactX - nextDirX * FRONT_CONTACT_OFFSET;
+      freeState.z = frontContactZ - nextDirZ * FRONT_CONTACT_OFFSET;
 
       // Gravedad en pendiente aplicada según vector de movimiento real
       if (speedMag > 0.25) {
@@ -657,8 +677,12 @@ async function initApp(): Promise<void> {
         if (curSpeed > 0.05) {
           const slipRatio = Math.min(1, Math.abs(vLateral) / Math.max(1.5, curSpeed));
           const highSpeedSlipFactor = Math.min(1, curSpeed / 15.8);
-          // A alta velocidad el caucho patina con menos fricción (~1.9 m/s²), más arrastre al cruzar la goma
-          const kineticSlideDecel = 3.9 - highSpeedSlipFactor * 1.95 + slipRatio * 2.15;
+          // Carga vertical trasera: sentado (weightBias < 0) frena mucho más; echado delante descarga atrás para alargarlo
+          const weightBrakeMod = seated01 * 3.1 - forwardLean01 * 1.75;
+          const kineticSlideDecel = Math.max(
+            1.45,
+            3.85 - highSpeedSlipFactor * 1.7 + slipRatio * 2.1 + weightBrakeMod
+          );
           const speedDrop = Math.min(curSpeed, kineticSlideDecel * dt);
           const scale = (curSpeed - speedDrop) / curSpeed;
           bikeState.velX *= scale;
@@ -667,7 +691,8 @@ async function initApp(): Promise<void> {
           // Re-proyectar tras la fricción cinética y aplicar mordida direccional limitada de la rueda delantera viva
           vForward = bikeState.velX * nextDirX + bikeState.velZ * nextDirZ;
           vLateral = bikeState.velX * nextRightX + bikeState.velZ * nextRightZ;
-          const maxFrontBite = 2.85 * dt; // fuerza lateral máxima que redirige el morro durante el derrape
+          // Más carga sobre la delantera = más mordida direccional limpia
+          const maxFrontBite = (2.85 + forwardLean01 * 1.05 - seated01 * 0.65) * dt;
           if (Math.abs(vLateral) <= maxFrontBite) {
             vLateral = 0;
           } else {
@@ -677,12 +702,30 @@ async function initApp(): Promise<void> {
           bikeState.velZ = nextDirZ * vForward + nextRightZ * vLateral;
         }
 
-        // Bamboleo: latigazo A/D + ángulo de deriva natural por la inercia cruzada
+        // Bamboleo + estabilidad dependiente del reparto de peso:
+        // Delante (↑) = trazada limpia y predecible; sentado (↓) = nerviosismo trasero que pide compensar con A/D
         const speedWhipGain = Math.min(1.0, speedMag / 6.0);
         const inertiaSlipBias = Math.max(-0.42, Math.min(0.42, (vLateral / Math.max(4, speedMag)) * 0.70));
-        const whipTarget = Math.max(-0.78, Math.min(0.78, turnInput * 0.56 * speedWhipGain + inertiaSlipBias));
-        const whipSpring = turnInput !== 0 ? 44.0 : 22.0;
-        const whipDamping = turnInput !== 0 ? 6.8 : 7.6;
+        let seatedChatterTarget = 0;
+        if (seated01 > 0.05) {
+          bikeState.skidJitterPhase += dt * (8.5 + curSpeed * 0.65);
+          const wobbleWave =
+            Math.sin(bikeState.skidJitterPhase) * 0.65 +
+            Math.cos(bikeState.skidJitterPhase * 1.73) * 0.35;
+          seatedChatterTarget = seated01 * Math.min(1, curSpeed / 5.5) * wobbleWave * 0.34;
+          if (turnInput === 0 && Math.abs(bikeState.whipAngle) < 0.08) {
+            bikeState.whipVel += seatedChatterTarget * 6.5 * dt;
+          }
+        }
+        const whipTarget = Math.max(
+          -0.8,
+          Math.min(0.8, turnInput * 0.56 * speedWhipGain + inertiaSlipBias + seatedChatterTarget)
+        );
+        const whipSpring = (turnInput !== 0 ? 44.0 : 22.0) - seated01 * 6.0;
+        const whipDamping = Math.max(
+          3.8,
+          (turnInput !== 0 ? 6.8 : 7.6) + forwardLean01 * 1.8 - seated01 * 2.8
+        );
         bikeState.whipVel += ((whipTarget - bikeState.whipAngle) * whipSpring - bikeState.whipVel * whipDamping) * dt;
         bikeState.whipAngle = Math.max(-0.82, Math.min(0.82, bikeState.whipAngle + bikeState.whipVel * dt));
       } else {
@@ -834,6 +877,7 @@ async function initApp(): Promise<void> {
           isSprinting: sprint && forwardInput > 0 && !isSkidding,
           isSkidding,
           whipAngle: bikeState.whipAngle,
+          weightBias: bikeState.weightBias,
           standBlend: bikeState.standBlend,
           hopLiftM: bikeState.hopLiftM,
           lookYaw: bikeState.lookYaw,
@@ -922,8 +966,14 @@ async function initApp(): Promise<void> {
       const gradeSign = gradePct >= 0.05 ? '+' : '';
       const camLabel =
         bikeState.camPreset === '34' ? '3/4' : bikeState.camPreset === 'rear' ? 'Trasera' : 'Cabina';
+      const skidPoseTag =
+        bikeState.weightBias > 0.38
+          ? ' DELANTE'
+          : bikeState.weightBias < -0.35
+            ? ' SENTADO'
+            : '';
       flightModeLabel.textContent = isSkidding
-        ? `Fixie · SKID ${Math.round(Math.abs(bikeState.whipAngle) * 57.3)}°`
+        ? `Fixie · SKID${skidPoseTag} ${Math.round(Math.abs(bikeState.whipAngle) * 57.3)}°`
         : `Fixie · ${camLabel}`;
       flightAltEl.textContent = `${Math.round(absGround)} m · ${gradeSign}${gradePct.toFixed(1)}%`;
       flightSpeedEl.textContent = `${Math.abs(bikeState.speedMs * 3.6).toFixed(0)} km/h`;

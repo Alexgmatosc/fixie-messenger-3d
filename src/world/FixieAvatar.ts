@@ -28,6 +28,7 @@ export interface FixieVisualState {
   standBlend: number;   // 0 = sentado, 1 = de pie esprintando / track stand
   hopLiftM: number;     // salto trasero al clavar hop-skid
   lookYaw: number;      // giro sutil de cabeza mirando salida de curva
+  weightBias: number;   // -1 = sentado atrás, 0 = neutro, +1 = echado al manillar
 }
 
 interface RiderLookSpec {
@@ -956,14 +957,14 @@ export class FixieAvatar {
     }
     this.crankGroup.rotation.x = -state.crankAngle;
 
-    // Postura real fixie: sprint de pie / track stand / aero tuck / skid "balls to stem"
+    // Postura real fixie: sprint de pie / track stand / aero tuck / reparto de pesos delante vs sentado
     const aeroTuck = !state.isSkidding ? Math.min(1, Math.max(0, (speedKmh - 30) / 26)) : 0;
 
     const targetHipF = state.isSkidding
-      ? 0.22
-      : state.standBlend * 0.11 + aeroTuck * 0.02;
+      ? 0.14 + state.weightBias * 0.14
+      : state.standBlend * 0.11 + aeroTuck * 0.02 + Math.max(0, state.weightBias) * 0.04;
     const targetHipU = state.isSkidding
-      ? 0.06
+      ? 0.03 + Math.max(0, state.weightBias) * 0.055
       : state.standBlend * 0.095;
 
     const smooth = Math.min(1, dt * 14);
@@ -974,8 +975,8 @@ export class FixieAvatar {
     this.riderGroup.position.set(riderRockX, this.hipShiftU, -this.hipShiftF);
 
     const targetTorsoPitch = state.isSkidding
-      ? -0.88
-      : -0.96 - aeroTuck * 0.18 - state.standBlend * 0.08;
+      ? -0.84 - state.weightBias * 0.22
+      : -0.96 - aeroTuck * 0.18 - state.standBlend * 0.08 - state.weightBias * 0.12;
     this.torsoGroup.rotation.x += (targetTorsoPitch - this.torsoGroup.rotation.x) * smooth;
 
     // La cabeza compensa la inclinación del torso y mira hacia el giro (look-ahead)
