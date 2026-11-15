@@ -7,7 +7,9 @@
     "dev": "vite --port 5173",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "fetch-map": "node scripts/fetch-madrid-data.mjs"
+    "fetch-map": "node scripts/fetch-madrid-data.mjs",
+    "fetch-lod2": "node scripts/import-madrid-lod2.mjs",
+    "extract-facades": "node scripts/extract-mapillary-facades.mjs"
   },
   "dependencies": {
     "three": "^0.175.0"

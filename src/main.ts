@@ -59,20 +59,47 @@ async function initApp(): Promise<void> {
   const btnCamAerial = document.getElementById('btn-cam-aerial') as HTMLButtonElement;
   const btnCamBike = document.getElementById('btn-cam-bike') as HTMLButtonElement;
   const btnRider = document.getElementById('btn-rider') as HTMLButtonElement;
+  const btnMapSource = document.getElementById('btn-map-source') as HTMLButtonElement | null;
   const btnPois = document.getElementById('btn-pois') as HTMLButtonElement;
 
-  // 1. Cargar manifiesto de chunks espaciales + DEM real
-  loadingStatus.textContent = 'Cargando índice espacial y topografía real de Madrid (M-30)...';
-  const manifestRes = await fetch('/data/chunks/manifest.json');
-  if (!manifestRes.ok) {
-    throw new Error(`No se pudo cargar /data/chunks/manifest.json (HTTP ${manifestRes.status})`);
+  const urlParams = new URLSearchParams(window.location.search);
+  let useLod2Map = urlParams.get('map') !== 'osm';
+
+  const manifestCache: Partial<Record<'lod2' | 'osm', ChunkManifest>> = {};
+  async function loadMapManifest(kind: 'lod2' | 'osm'): Promise<ChunkManifest> {
+    const cached = manifestCache[kind];
+    if (cached) return cached;
+    const url = kind === 'lod2' ? '/data/chunks-lod2/manifest.json' : '/data/chunks/manifest.json';
+    const res = await fetch(url);
+    if (!res.ok) {
+      if (kind === 'lod2') return loadMapManifest('osm');
+      throw new Error(`No se pudo cargar ${url} (HTTP ${res.status})`);
+    }
+    const parsed = (await res.json()) as ChunkManifest;
+    manifestCache[kind] = parsed;
+    return parsed;
   }
-  const manifest = (await manifestRes.json()) as ChunkManifest;
-  const terrain = new TerrainElevation(manifest.dem, 1.0);
-  mapSubtitle.textContent =
-    `${manifest.totals.chunks} bloques (${manifest.meta.chunkSizeM}×${manifest.meta.chunkSizeM} m) · ` +
-    `${manifest.totals.buildings.toLocaleString('es-ES')} edificios · ` +
-    `cota ${Math.round(terrain.minElevationM)}–${Math.round(terrain.maxElevationM)} m s.n.m.`;
+
+  // 1. Cargar manifiesto de chunks espaciales + DEM real
+  loadingStatus.textContent = 'Cargando índice espacial LoD2 1:1000 y topografía de Madrid...';
+  let activeManifest = await loadMapManifest(useLod2Map ? 'lod2' : 'osm');
+  if (activeManifest === manifestCache.osm) {
+    useLod2Map = false;
+  }
+  const terrain = new TerrainElevation(activeManifest.dem, 1.0);
+  const updateSubtitle = (m: ChunkManifest) => {
+    const tag = useLod2Map ? 'LoD2 1:1000' : 'OSM Base';
+    mapSubtitle.textContent =
+      `${tag} · ${m.totals.chunks} bloques (${m.meta.chunkSizeM}×${m.meta.chunkSizeM} m) · ` +
+      `${m.totals.buildings.toLocaleString('es-ES')} volúmenes · ` +
+      `cota ${Math.round(terrain.minElevationM)}–${Math.round(terrain.maxElevationM)} m s.n.m.`;
+  };
+  updateSubtitle(activeManifest);
+  if (btnMapSource) {
+    btnMapSource.textContent = useLod2Map ? 'Mapa: LoD2 1:1000' : 'Mapa: OSM Base';
+    btnMapSource.classList.toggle('active', useLod2Map);
+    btnMapSource.setAttribute('aria-pressed', String(useLod2Map));
+  }
 
   // 2. Configurar Renderer WebGPU (pixelRatio limitado a 1.5 para fluidez en pantallas Retina)
   loadingStatus.textContent = 'Inicializando motor WebGPU...';
@@ -133,7 +160,7 @@ async function initApp(): Promise<void> {
   skidTrail.mesh.visible = false;
   scene.add(skidTrail.mesh);
 
-  const chunkManager = new ChunkManager(manifest, scene, resources, terrain);
+  const chunkManager = new ChunkManager(activeManifest, scene, resources, terrain);
   loadingStatus.textContent = 'Cargando entorno inicial alrededor de Neptuno...';
   await chunkManager.preloadAround(0, 0, 740);
 
@@ -464,6 +491,26 @@ async function initApp(): Promise<void> {
     btnPois.setAttribute('aria-pressed', String(poisVisible));
     poiLayer.style.display = poisVisible ? 'block' : 'none';
   });
+
+  if (btnMapSource) {
+    btnMapSource.addEventListener('click', async () => {
+      btnMapSource.disabled = true;
+      useLod2Map = !useLod2Map;
+      try {
+        activeManifest = await loadMapManifest(useLod2Map ? 'lod2' : 'osm');
+        updateSubtitle(activeManifest);
+        btnMapSource.textContent = useLod2Map ? 'Mapa: LoD2 1:1000' : 'Mapa: OSM Base';
+        btnMapSource.classList.toggle('active', useLod2Map);
+        btnMapSource.setAttribute('aria-pressed', String(useLod2Map));
+        chunkManager.setManifest(activeManifest);
+        const fx = cameraMode === 'map' ? mapControls.target.x : freeState.x;
+        const fz = cameraMode === 'map' ? mapControls.target.z : freeState.z;
+        await chunkManager.preloadAround(fx, fz, 720);
+      } finally {
+        btnMapSource.disabled = false;
+      }
+    });
+  }
 
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;

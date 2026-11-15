@@ -16,6 +16,10 @@ export interface BuildingFeature {
   roofShape?: RoofShape;
   roofHeight?: number;
   isPart?: boolean;
+  parent3dId?: number;
+  lod2Tier?: 'base' | 'main' | 'attic' | 'tower';
+  hasCornice?: boolean;
+  facadeId?: number;
   rings: [number, number][][];
 }
 

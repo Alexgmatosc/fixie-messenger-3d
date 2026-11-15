@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 
-export const FACADE_LAYER_COUNT = 6;
+export const FACADE_LAYER_COUNT = 8;
 export const FACADE_TILE_SIZE = 512;
 
 export interface MadridFacadeArrays {
@@ -560,7 +560,239 @@ function drawGroundStorefrontLayer(
 }
 
 /**
- * Construye el DataArrayTexture de fachadas de Madrid (6 capas PBR seamless de 512×512).
+ * Capa 6: Gran Vía / Alcalá Beaux-Arts (Metrópolis, Grassy, Telefónica)
+ * Caliza marfil tallada, columnas pareadas corintias, ménsulas, balaustradas de piedra y detalles dorados.
+ */
+function drawGranViaBeauxArtsLayer(
+  aCtx: CanvasRenderingContext2D,
+  pCtx: CanvasRenderingContext2D,
+  S: number
+): void {
+  aCtx.fillStyle = '#eee6d7';
+  aCtx.fillRect(0, 0, S, S);
+  pCtx.fillStyle = pbrRgb(0.58, 0.80, 0.02, 0.24);
+  pCtx.fillRect(0, 0, S, S);
+
+  // Sillería fina de piedra caliza marfil
+  const ashlarRows = 24;
+  const rowH = S / ashlarRows;
+  aCtx.strokeStyle = 'rgba(150, 138, 118, 0.28)';
+  aCtx.lineWidth = 1;
+  pCtx.strokeStyle = pbrRgb(0.40, 0.86, 0.02, 0.24);
+  pCtx.lineWidth = 1.2;
+  for (let r = 0; r < ashlarRows; r++) {
+    const y = r * rowH;
+    aCtx.beginPath();
+    aCtx.moveTo(0, y);
+    aCtx.lineTo(S, y);
+    aCtx.stroke();
+    pCtx.beginPath();
+    pCtx.moveTo(0, y);
+    pCtx.lineTo(S, y);
+    pCtx.stroke();
+
+    const off = (r % 2) * (S / 20);
+    for (let c = 0; c < 10; c++) {
+      const x = (c * (S / 10) + off) % S;
+      aCtx.beginPath();
+      aCtx.moveTo(x, y);
+      aCtx.lineTo(x, y + rowH);
+      aCtx.stroke();
+    }
+  }
+
+  const cols = 4;
+  const rows = 4;
+  const cellW = S / cols;
+  const cellH = S / rows;
+
+  for (let r = 0; r < rows; r++) {
+    const y0 = r * cellH;
+    // Entablamento Beaux-Arts con cornisa, dentículos y sombra profunda
+    aCtx.fillStyle = '#f6f1e6';
+    aCtx.fillRect(0, y0, S, 11);
+    aCtx.fillStyle = '#dcd1be';
+    aCtx.fillRect(0, y0 + 11, S, 7);
+    aCtx.fillStyle = '#9c907e';
+    aCtx.fillRect(0, y0 + 18, S, 3);
+    pCtx.fillStyle = pbrRgb(0.94, 0.72, 0.03, 0.22);
+    pCtx.fillRect(0, y0, S, 11);
+
+    // Dentículos / modillones esculpidos
+    for (let dx = 4; dx < S; dx += 14) {
+      aCtx.fillStyle = '#f5efe3';
+      aCtx.fillRect(dx, y0 + 11, 7, 6);
+      aCtx.fillStyle = '#8b7f6e';
+      aCtx.fillRect(dx + 7, y0 + 11, 7, 5);
+    }
+
+    for (let c = 0; c < cols; c++) {
+      const x0 = c * cellW;
+
+      // Columnas pareadas / pilastras estriadas con capitel dorado sutil
+      const colLeft = x0 + 2;
+      const colRight = x0 + cellW - 14;
+      for (const cx of [colLeft, colRight]) {
+        aCtx.fillStyle = '#f5efe2';
+        aCtx.fillRect(cx, y0 + 21, 12, cellH - 21);
+        aCtx.fillStyle = '#cbbda7';
+        aCtx.fillRect(cx + 3, y0 + 28, 2, cellH - 36);
+        aCtx.fillRect(cx + 7, y0 + 28, 2, cellH - 36);
+        // Capitel con detalle escultórico cálido
+        aCtx.fillStyle = '#e7dcc8';
+        aCtx.fillRect(cx - 2, y0 + 21, 16, 7);
+        aCtx.fillStyle = '#c9a64c';
+        aCtx.fillRect(cx + 1, y0 + 22, 10, 2);
+        pCtx.fillStyle = pbrRgb(0.86, 0.76, 0.06, 0.2);
+        pCtx.fillRect(cx, y0 + 21, 12, cellH - 21);
+      }
+
+      // Vano monumental centrado con clave y dintel moldurado
+      const wx = x0 + cellW * 0.24;
+      const ww = cellW * 0.52;
+      const wy = y0 + cellH * 0.24;
+      const wh = cellH * 0.56;
+
+      aCtx.fillStyle = '#f6f1e6';
+      aCtx.fillRect(wx - 6, wy - 7, ww + 12, 8);
+      // Clave central destacada
+      aCtx.fillStyle = '#efe5d3';
+      aCtx.fillRect(wx + ww * 0.5 - 5, wy - 10, 10, 11);
+
+      // Hueco de vidrio profundo + carpintería bronce oscuro + reflejos cálidos
+      aCtx.fillStyle = '#293039';
+      aCtx.fillRect(wx, wy, ww, wh);
+      aCtx.fillStyle = '#1b222a';
+      aCtx.fillRect(wx + 4, wy + 4, ww * 0.5 - 6, wh - 8);
+      aCtx.fillRect(wx + ww * 0.5 + 2, wy + 4, ww * 0.5 - 6, wh - 8);
+      aCtx.fillStyle = '#3b4a59';
+      aCtx.fillRect(wx + 6, wy + 7, ww * 0.22, wh * 0.42);
+      aCtx.fillStyle = '#cbb185';
+      aCtx.fillRect(wx + ww * 0.5 - 1.5, wy + 2, 3, wh - 4);
+      aCtx.fillRect(wx + 2, wy + wh * 0.42, ww - 4, 2.5);
+      pCtx.fillStyle = pbrRgb(0.18, 0.14, 0.42, 0.05);
+      pCtx.fillRect(wx + 3, wy + 3, ww - 6, wh - 6);
+
+      // Balaustrada de piedra tallada Beaux-Arts (alternando barandilla y piedra)
+      const balY = y0 + cellH - 22;
+      aCtx.fillStyle = '#f4eee2';
+      aCtx.fillRect(wx - 7, balY, ww + 14, 4);
+      aCtx.fillRect(wx - 8, balY + 14, ww + 16, 6);
+      pCtx.fillStyle = pbrRgb(0.92, 0.72, 0.04, 0.15);
+      pCtx.fillRect(wx - 7, balY, ww + 14, 20);
+
+      for (let b = 0; b <= 6; b++) {
+        const bx = wx - 5 + ((ww + 10) * b) / 6;
+        aCtx.fillStyle = r % 2 === 0 ? '#4a4640' : '#24292f';
+        aCtx.fillRect(bx - 3, balY + 4, 8, 10);
+        aCtx.fillStyle = r % 2 === 0 ? '#e3d9c6' : '#c9a64c';
+        aCtx.fillRect(bx - 1, balY + 4, 4, 10);
+      }
+    }
+  }
+
+  addFineMineralGrain(aCtx, pCtx, S, 707, 11, 16);
+}
+
+/**
+ * Capa 7: Barroco madrileño ladrillo & granito (Parroquia San José, Alcalá, Calatravas)
+ * Aparejo de ladrillo terracota fino combinado con grandes pilastras, cadenas y frontones de granito gris.
+ */
+function drawBaroqueBrickStoneLayer(
+  aCtx: CanvasRenderingContext2D,
+  pCtx: CanvasRenderingContext2D,
+  S: number
+): void {
+  // Mortero calizo claro entre hiladas finas
+  aCtx.fillStyle = '#c8bdb0';
+  aCtx.fillRect(0, 0, S, S);
+  pCtx.fillStyle = pbrRgb(0.40, 0.90, 0.01, 0.14);
+  pCtx.fillRect(0, 0, S, S);
+
+  // Aparejo de ladrillo barroco rojo-terracota (36 hiladas × 14)
+  const brickRows = 36;
+  const brickCols = 14;
+  const bh = S / brickRows;
+  const bw = S / brickCols;
+  for (let r = 0; r < brickRows; r++) {
+    const y = r * bh;
+    const shift = (r % 2) * (bw * 0.5);
+    for (let c = -1; c <= brickCols; c++) {
+      const x = c * bw + shift;
+      const n = hash2(c + 20, r, 811);
+      const red = Math.round(148 + (n - 0.5) * 26);
+      const green = Math.round(69 + (n - 0.5) * 16);
+      const blue = Math.round(52 + (n - 0.5) * 14);
+      aCtx.fillStyle = `rgb(${red},${green},${blue})`;
+      aCtx.fillRect(x + 0.6, y + 0.6, bw - 1.2, bh - 1.2);
+      pCtx.fillStyle = pbrRgb(0.55 + (n - 0.5) * 0.08, 0.89, 0.01, 0.12);
+      pCtx.fillRect(x + 0.6, y + 0.6, bw - 1.2, bh - 1.2);
+    }
+  }
+
+  const cols = 4;
+  const rows = 4;
+  const cellW = S / cols;
+  const cellH = S / rows;
+
+  for (let r = 0; r < rows; r++) {
+    const y0 = r * cellH;
+    // Imposta y cornisa de granito gris-crema de Guadarrama
+    aCtx.fillStyle = '#d8d2c7';
+    aCtx.fillRect(0, y0, S, 10);
+    aCtx.fillStyle = '#9e978c';
+    aCtx.fillRect(0, y0 + 10, S, 3);
+    pCtx.fillStyle = pbrRgb(0.84, 0.84, 0.02, 0.18);
+    pCtx.fillRect(0, y0, S, 10);
+
+    for (let c = 0; c < cols; c++) {
+      const x0 = c * cellW;
+      // Anchas pilastras de sillería granítica cada módulo
+      const pilW = c % 2 === 0 ? 16 : 10;
+      aCtx.fillStyle = '#d4cec3';
+      aCtx.fillRect(x0 + 1, y0 + 13, pilW, cellH - 13);
+      aCtx.fillStyle = '#b4ada2';
+      aCtx.fillRect(x0 + 1 + pilW - 2, y0 + 13, 2, cellH - 13);
+      pCtx.fillStyle = pbrRgb(0.80, 0.83, 0.02, 0.18);
+      pCtx.fillRect(x0 + 1, y0 + 13, pilW, cellH - 13);
+
+      const wx = x0 + cellW * 0.25;
+      const ww = cellW * 0.50;
+      const wy = y0 + cellH * 0.25;
+      const wh = cellH * 0.56;
+
+      // Recerco y frontón triangular/partido en granito gris
+      aCtx.fillStyle = '#dfd9ce';
+      aCtx.fillRect(wx - 7, wy - 8, ww + 14, cellH * 0.56 + 14);
+      aCtx.beginPath();
+      aCtx.moveTo(wx - 9, wy - 8);
+      aCtx.lineTo(wx + ww * 0.5, wy - 19);
+      aCtx.lineTo(wx + ww + 9, wy - 8);
+      aCtx.closePath();
+      aCtx.fill();
+      aCtx.fillStyle = '#9b9388';
+      aCtx.fillRect(wx - 7, wy + wh + 5, ww + 14, 3);
+      pCtx.fillStyle = pbrRgb(0.82, 0.83, 0.02, 0.18);
+      pCtx.fillRect(wx - 7, wy - 8, ww + 14, wh + 14);
+
+      // Hueco profundo con carpintería madera oscura + vidrio + reja barroca
+      aCtx.fillStyle = '#352b25';
+      aCtx.fillRect(wx, wy, ww, wh);
+      aCtx.fillStyle = '#1d2630';
+      aCtx.fillRect(wx + 4, wy + 4, ww * 0.5 - 6, wh - 8);
+      aCtx.fillRect(wx + ww * 0.5 + 2, wy + 4, ww * 0.5 - 6, wh - 8);
+      aCtx.fillStyle = '#1e2226';
+      aCtx.fillRect(wx - 4, wy + wh * 0.65, ww + 8, 2.5);
+      pCtx.fillStyle = pbrRgb(0.18, 0.18, 0.30, 0.05);
+      pCtx.fillRect(wx + 4, wy + 4, ww - 8, wh - 8);
+    }
+  }
+
+  addFineMineralGrain(aCtx, pCtx, S, 808, 12, 16);
+}
+
+/**
+ * Construye el DataArrayTexture de fachadas de Madrid (8 capas PBR seamless de 512×512).
  */
 export function createMadridFacadeArrays(): MadridFacadeArrays {
   const S = FACADE_TILE_SIZE;
@@ -575,6 +807,8 @@ export function createMadridFacadeArrays(): MadridFacadeArrays {
     drawModernResidentialLayer,
     drawGlassCurtainWallLayer,
     drawGroundStorefrontLayer,
+    drawGranViaBeauxArtsLayer,
+    drawBaroqueBrickStoneLayer,
   ];
 
   for (let i = 0; i < drawers.length; i++) {

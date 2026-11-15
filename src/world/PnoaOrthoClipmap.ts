@@ -33,8 +33,8 @@ export interface OrthoSampleNodes {
 
 /**
  * Clipmap dinámico con la Ortofotografía oficial de España (IGN PNOA WMTS):
- * - Mantiene una ventana de 1024×1024 m en alta resolución centrada en la cámara/bici (~0.45–0.8 m/px).
- * - Carga primero nivel z=17 para cobertura instantánea del entorno y refina el área cercana a z=18.
+ * - Mantiene una ventana de 1024×1024 m en alta resolución (canvas 1536×1536) centrada en la cámara/bici.
+ * - Carga progresivamente z=17 (1024 m), refina a z=18 (540 m) y culmina en z=19 (~210 m, ~0.22 m/px).
  * - Proyecta exactamente cada tesela EPSG:3857 al plano métrico local `projectToMeters()` sin desfase.
  */
 export class PnoaOrthoClipmap {
@@ -42,10 +42,10 @@ export class PnoaOrthoClipmap {
   /** vec4(originX, originZ, invSpan, readyAlpha) */
   public readonly boundsUniform: ReturnType<typeof uniform<THREE.Vector4>>;
 
-  private readonly canvasSize = 1280;
+  private readonly canvasSize = 1536;
   private readonly spanM = 1024;
   private readonly recenterThresholdM = 190;
-  private readonly maxTileCache = 260;
+  private readonly maxTileCache = 320;
 
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
@@ -138,10 +138,9 @@ export class PnoaOrthoClipmap {
     const minZ = cz - half;
     const maxZ = cz + half;
 
-    // 1. Nivel z=17 sobre toda la ventana (1024×1024 m) + z=18 sobre los 540 m centrales
+    // 1. Nivel z=17 sobre toda la ventana (1024×1024 m), z=18 en 540 m y z=19 en 210 m centrales (~0.22 m/px)
     const [lonW, latN] = unprojectFromMeters(minX, minZ);
     const [lonE, latS] = unprojectFromMeters(maxX, maxZ);
-
     const z17Tiles = this.collectTileCoords(lonW, latS, lonE, latN, 17);
 
     const innerHalf = 270;
@@ -149,7 +148,12 @@ export class PnoaOrthoClipmap {
     const [inLonE, inLatS] = unprojectFromMeters(cx + innerHalf, cz + innerHalf);
     const z18Tiles = this.collectTileCoords(inLonW, inLatS, inLonE, inLatN, 18);
 
-    // Pintar primero cualquier tile z=17 ya cacheado para tener respuesta visual instantánea
+    const innerHiHalf = 105;
+    const [hiLonW, hiLatN] = unprojectFromMeters(cx - innerHiHalf, cz - innerHiHalf);
+    const [hiLonE, hiLatS] = unprojectFromMeters(cx + innerHiHalf, cz + innerHiHalf);
+    const z19Tiles = this.collectTileCoords(hiLonW, hiLatS, hiLonE, hiLatN, 19);
+
+    // Pintar primero cualquier tile z=17 para respuesta visual instantánea
     const z17Loaded = await Promise.all(
       z17Tiles.map((t) => this.fetchTile(t.z, t.x, t.y, signal).then((bmp) => ({ ...t, bmp })))
     );
@@ -171,23 +175,25 @@ export class PnoaOrthoClipmap {
       this.texture.needsUpdate = true;
     }
 
-    // 2. Superponer z=18 de alta nitidez en la zona central alrededor de la bici
-    const z18Loaded = await Promise.all(
-      z18Tiles.map((t) => this.fetchTile(t.z, t.x, t.y, signal).then((bmp) => ({ ...t, bmp })))
-    );
-    if (signal.aborted || batchId !== this.activeBatchId) return;
+    // 2 y 3. Superponer z=18 (media distancia) y z=19 (detalle ultra nítido alrededor de la bici)
+    for (const tiles of [z18Tiles, z19Tiles]) {
+      const loaded = await Promise.all(
+        tiles.map((t) => this.fetchTile(t.z, t.x, t.y, signal).then((bmp) => ({ ...t, bmp })))
+      );
+      if (signal.aborted || batchId !== this.activeBatchId) return;
 
-    let drawnHi = false;
-    for (const item of z18Loaded) {
-      if (item.bmp) {
-        this.blitTile(item.bmp, item.z, item.x, item.y, minX, minZ);
-        drawnHi = true;
+      let drawn = false;
+      for (const item of loaded) {
+        if (item.bmp) {
+          this.blitTile(item.bmp, item.z, item.x, item.y, minX, minZ);
+          drawn = true;
+        }
       }
-    }
 
-    if (drawnHi) {
-      this.boundsUniform.value.set(minX, minZ, 1 / this.spanM, 1);
-      this.texture.needsUpdate = true;
+      if (drawn) {
+        this.boundsUniform.value.set(minX, minZ, 1 / this.spanM, 1);
+        this.texture.needsUpdate = true;
+      }
     }
   }
 

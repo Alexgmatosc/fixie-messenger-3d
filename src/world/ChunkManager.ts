@@ -31,7 +31,7 @@ export interface StreamingStats {
  * - Solo cuando la caché supera `warmCacheMaxChunks` se liberan los más antiguos por LRU.
  */
 export class ChunkManager {
-  private readonly manifest: ChunkManifest;
+  private manifest: ChunkManifest;
   private readonly scene: THREE.Scene;
   private readonly resources: SharedCityResources;
   private readonly terrain: TerrainElevation;
@@ -62,6 +62,24 @@ export class ChunkManager {
 
   get totalChunks(): number {
     return this.manifest.totals.chunks;
+  }
+
+  setManifest(nextManifest: ChunkManifest): void {
+    for (const ctrl of this.inflight.values()) {
+      ctrl.abort();
+    }
+    this.inflight.clear();
+    this.pendingBuild.length = 0;
+
+    for (const chunk of this.cache.values()) {
+      this.scene.remove(chunk.group);
+      disposeChunkGroup(chunk.group, this.resources);
+    }
+    this.cache.clear();
+
+    this.manifest = nextManifest;
+    this.lastScanX = Infinity;
+    this.lastScanZ = Infinity;
   }
 
   update(focusX: number, focusZ: number): void {
@@ -171,17 +189,23 @@ export class ChunkManager {
     }
   }
 
+  private resolveChunkUrl(entry: ChunkManifestEntry): string {
+    return entry.file.startsWith('/') ? entry.file : `/data/chunks/${entry.file}`;
+  }
+
   private startFetch(entry: ChunkManifestEntry): void {
     const controller = new AbortController();
+    const targetManifest = this.manifest;
     this.inflight.set(entry.key, controller);
 
-    fetch(`/data/chunks/${entry.file}`, { signal: controller.signal })
+    fetch(this.resolveChunkUrl(entry), { signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json() as Promise<ChunkPayload>;
       })
       .then((payload) => {
         this.inflight.delete(entry.key);
+        if (this.manifest !== targetManifest) return;
         this.pendingBuild.push({ entry, payload });
       })
       .catch((err) => {
@@ -193,11 +217,12 @@ export class ChunkManager {
   }
 
   async preloadAround(focusX: number, focusZ: number, radiusM = 740): Promise<void> {
-    const chunkSize = this.manifest.meta.chunkSizeM;
+    const targetManifest = this.manifest;
+    const chunkSize = targetManifest.meta.chunkSizeM;
     const halfChunk = chunkSize * 0.5;
     const rSq = radiusM * radiusM;
 
-    const initial = this.manifest.chunks
+    const initial = targetManifest.chunks
       .map((entry) => {
         const cx = entry.cx * chunkSize + halfChunk;
         const cz = entry.cz * chunkSize + halfChunk;
@@ -208,10 +233,11 @@ export class ChunkManager {
 
     await Promise.all(
       initial.map(async ({ entry }) => {
-        if (this.cache.has(entry.key)) return;
-        const res = await fetch(`/data/chunks/${entry.file}`);
-        if (!res.ok) return;
+        if (this.cache.has(entry.key) || this.manifest !== targetManifest) return;
+        const res = await fetch(this.resolveChunkUrl(entry));
+        if (!res.ok || this.manifest !== targetManifest) return;
         const payload = (await res.json()) as ChunkPayload;
+        if (this.manifest !== targetManifest || this.cache.has(entry.key)) return;
         const result = buildChunkGroup(payload, this.resources, this.terrain);
         result.group.visible = true;
         this.scene.add(result.group);

@@ -1247,8 +1247,13 @@ function emitOrientedRooftopBox(
 function chooseBuildingWallStyle(
   b: ChunkPayload['buildings'][number],
   hVal: number,
+  worldX: number,
   worldZ: number
 ): number {
+  if (typeof b.facadeId === 'number') {
+    return b.facadeId;
+  }
+
   const name = b.name?.toLowerCase() ?? '';
   const hasClassicRoof =
     b.roofShape === 'dome' ||
@@ -1274,7 +1279,29 @@ function chooseBuildingWallStyle(
     return 4; // Muro cortina acristalado azul-plata
   }
 
-  // En Gran Vía, Alcalá, Cibeles y Centro: edificios altos/singulares y cúpulas son piedra caliza Beaux-Arts
+  // Hitos barrocos de ladrillo y granito (Parroquia San José, Calatravas, Oratorios)
+  if (/parroquia|iglesia|san jos[eé]|calatrava|oratorio/.test(name)) {
+    return 7;
+  }
+
+  // Hitos Beaux-Arts de Gran Vía / Alcalá (Edificio Metrópolis, Grassy, Telefónica, Banco de España)
+  if (
+    b.id === 'way/332068538' ||
+    /metr[oó]polis|grassy|telef[oó]nica|c[ií]rculo de bellas artes|banco de espa[nñ]a|capitol|carri[oó]n/.test(
+      name
+    )
+  ) {
+    return 6;
+  }
+
+  // Corredor monumental Gran Vía / Alcalá (entre Cibeles y Callao)
+  const inGranViaAlcalaCorridor =
+    worldX >= -1100 && worldX <= -50 && worldZ >= -600 && worldZ <= -310;
+  if (inGranViaAlcalaCorridor && (b.height >= 18 || hasClassicRoof)) {
+    return hVal > 0.78 && b.height < 26 ? 7 : 6;
+  }
+
+  // En Centro / Retiro / Salamanca: edificios altos/singulares y cúpulas usan piedra noble
   if (
     b.roofShape === 'dome' ||
     b.roofShape === 'mansard' ||
@@ -1282,7 +1309,7 @@ function chooseBuildingWallStyle(
     isHistoricName ||
     b.height >= 23
   ) {
-    return /parroquia|iglesia|san jos[eé]/.test(name) ? 2 : 1;
+    return 1;
   }
 
   if (b.height >= 15) {
@@ -1294,6 +1321,73 @@ function chooseBuildingWallStyle(
   if (hVal < 0.36) return 2;
   if (hVal < 0.72) return 0;
   return 3;
+}
+
+function emitPerimeterCorniceLedge(
+  buf: BuildingEmitBuffers,
+  outer: THREE.Vector2[],
+  topY: number,
+  topLH: number,
+  cr: number,
+  cg: number,
+  cb: number
+): void {
+  const n = outer.length;
+  if (n < 3 || n > 24) return;
+  const edgeNX = new Float32Array(n);
+  const edgeNZ = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const p0 = outer[i];
+    const p1 = outer[(i + 1) % n];
+    const dx = p1.x - p0.x;
+    const dz = -(p1.y - p0.y);
+    const len = Math.hypot(dx, dz) || 1;
+    edgeNX[i] = -dz / len;
+    edgeNZ[i] = dx / len;
+  }
+
+  const overhang = 0.26;
+  const ledgeBot = topY - 0.34;
+  const ledgeTop = topY + 0.04;
+  const extX = new Float32Array(n);
+  const extZ = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const prev = (i - 1 + n) % n;
+    let mx = edgeNX[prev] + edgeNX[i];
+    let mz = edgeNZ[prev] + edgeNZ[i];
+    const mLen = Math.hypot(mx, mz);
+    if (mLen < 0.05) {
+      extX[i] = outer[i].x + edgeNX[i] * overhang;
+      extZ[i] = -outer[i].y + edgeNZ[i] * overhang;
+    } else {
+      mx /= mLen;
+      mz /= mLen;
+      const dot = Math.max(0.45, mx * edgeNX[i] + mz * edgeNZ[i]);
+      const dist = Math.min(overhang * 1.6, overhang / dot);
+      extX[i] = outer[i].x + mx * dist;
+      extZ[i] = -outer[i].y + mz * dist;
+    }
+  }
+
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const p0 = outer[i];
+    const p1 = outer[j];
+    const ax = p0.x;
+    const az = -p0.y;
+    const bx = p1.x;
+    const bz = -p1.y;
+    const ex0 = extX[i];
+    const ez0 = extZ[i];
+    const ex1 = extX[j];
+    const ez1 = extZ[j];
+
+    pushWallQuad(buf, ex0, ez0, ex1, ez1, ledgeBot, ledgeTop, topLH - 0.34, topLH + 0.04, 0.38, 0, cr, cg, cb, 3);
+    pushBuildingTri(buf, ax, ledgeTop, az, topLH, 0, bx, ledgeTop, bz, topLH, 0, ex1, ledgeTop, ez1, topLH, 0, 0, 1, 0, cr, cg, cb, 3);
+    pushBuildingTri(buf, ax, ledgeTop, az, topLH, 0, ex1, ledgeTop, ez1, topLH, 0, ex0, ledgeTop, ez0, topLH, 0, 0, 1, 0, cr, cg, cb, 3);
+    pushBuildingTri(buf, ax, ledgeBot, az, topLH - 0.34, 0.34, ex1, ledgeBot, ez1, topLH - 0.34, 0.34, bx, ledgeBot, bz, topLH - 0.34, 0.34, 0, -1, 0, cr, cg, cb, 3);
+    pushBuildingTri(buf, ax, ledgeBot, az, topLH - 0.34, 0.34, ex0, ledgeBot, ez0, topLH - 0.34, 0.34, ex1, ledgeBot, ez1, topLH - 0.34, 0.34, 0, -1, 0, cr, cg, cb, 3);
+  }
 }
 
 function buildBuildingsMesh(
@@ -1361,7 +1455,7 @@ function buildBuildingsMesh(
     const botLH = minH > 0.2 ? minH : 0;
 
     const hVal = hashString(b.id);
-    buf.currentWallStyle = chooseBuildingWallStyle(b, hashString(b.id + '_ws'), cz);
+    buf.currentWallStyle = chooseBuildingWallStyle(b, hashString(b.id + '_ws'), cx, cz);
     const toneHex = PALETTE.buildingTones[Math.floor(hVal * PALETTE.buildingTones.length)];
     tempColor.setHex(toneHex);
     const shade = 0.96 + hashString(b.id + '_s') * 0.08;
@@ -1667,8 +1761,17 @@ function buildBuildingsMesh(
         emitFlatTriangles(allPts, roofTris, wallTopY, wallTopLocal, 1);
       }
 
-      // Casetones / lucernarios procedurales en azoteas medianas y grandes
-      if (area >= 95 && wallTopLocal >= 7.0) {
+      // Cornisa volada arquitectónica en cuerpos principales clásicos y LoD2
+      if (
+        !hasCustomRoof &&
+        buf.currentWallStyle !== 4 &&
+        (b.hasCornice || (!b.parent3dId && wallTopLocal >= 12))
+      ) {
+        emitPerimeterCorniceLedge(buf, parsed.outer, wallTopY, wallTopLocal, cr, cg, cb);
+      }
+
+      // Casetones / lucernarios procedurales solo en edificios OSM planos (LoD2 ya trae volúmenes reales)
+      if (!b.parent3dId && area >= 95 && wallTopLocal >= 7.0) {
         let bestLenSq = 0;
         let ux = 1;
         let uz = 0;

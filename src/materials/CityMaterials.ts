@@ -173,8 +173,11 @@ export function createBuildingMaterial(
     const groundAlbedo = texture(facades.albedoArray, groundUV).depth(groundLayer);
     const groundPbr = texture(facades.pbrArray, groundUV).depth(groundLayer);
 
-    // Las torres acristaladas (estilo >= 3.5) mantienen muro cortina hasta ras de acera
-    const isGlassTower = step(float(3.5), wallStyle);
+    // Solo las torres acristaladas (estilo === 4) mantienen muro cortina hasta ras de acera;
+    // las fachadas históricas 6 (Gran Vía) y 7 (Barroco ladrillo) sí reciben bajos nobles/comerciales
+    const isGlassTower = step(float(3.5), wallStyle).mul(
+      float(1.0).sub(step(float(4.5), wallStyle))
+    );
     const shopfrontBlend = plinthMask.mul(float(1.0).sub(isGlassTower));
 
     const texAlbedo = mix(upperAlbedo.rgb, groundAlbedo.rgb, shopfrontBlend);
