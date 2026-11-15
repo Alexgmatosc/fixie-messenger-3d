@@ -5,6 +5,7 @@ import { PALETTE } from './materials/CityMaterials';
 import type { ChunkManifest, PoiDefinition } from './types/mapData';
 import { ChunkManager } from './world/ChunkManager';
 import { buildBaseGroundMesh, createSharedCityResources } from './world/CityBuilder';
+import { FixieAvatar } from './world/FixieAvatar';
 
 const POIS: PoiDefinition[] = [
   { id: 'neptuno', label: 'Fuente de Neptuno', lon: -3.6941, lat: 40.4152, heightOffsetM: 10, category: 'landmark' },
@@ -110,9 +111,22 @@ async function initApp(): Promise<void> {
   scene.add(dirLight);
   scene.add(dirLight.target);
 
-  // 4. Recursos compartidos + terreno real + gestor de Spatial Chunk Streaming
+  const [rawMinX, rawMaxZ] = projectToMeters(terrain.bbox[0], terrain.bbox[1]);
+  const [rawMaxX, rawMinZ] = projectToMeters(terrain.bbox[2], terrain.bbox[3]);
+  const worldBounds = {
+    minX: rawMinX - 250,
+    maxX: rawMaxX + 250,
+    minZ: rawMinZ - 250,
+    maxZ: rawMaxZ + 250,
+  };
+
+  // 4. Recursos compartidos + terreno real + gestor de Spatial Chunk Streaming + Avatar Fixie
   const resources = createSharedCityResources();
   scene.add(buildBaseGroundMesh(resources, terrain));
+
+  const fixieAvatar = new FixieAvatar();
+  fixieAvatar.root.visible = false;
+  scene.add(fixieAvatar.root);
 
   const chunkManager = new ChunkManager(manifest, scene, resources, terrain);
   loadingStatus.textContent = 'Cargando entorno inicial alrededor de Neptuno...';
@@ -156,9 +170,28 @@ async function initApp(): Promise<void> {
     lastMouseY: 0,
   };
 
+  const bikeState = {
+    speedMs: 0,
+    steerAngle: 0,
+    leanAngle: 0,
+    crankAngle: 0,
+    slopePitch: 0,
+    driftSlipAngle: 0,
+    chaseView: true,
+    chaseDist: 6.8,
+    camOrbitYaw: 0,
+    camPitch: 0.24,
+    camPos: new THREE.Vector3(-11, startGroundY + 3.5, 82),
+    camLook: new THREE.Vector3(-11, startGroundY + 1.2, 65),
+  };
+
   const keys = new Set<string>();
   window.addEventListener('keydown', (e) => {
     keys.add(e.code);
+    if (e.code === 'KeyC' && !e.repeat && cameraMode === 'bike') {
+      bikeState.chaseView = !bikeState.chaseView;
+      fixieAvatar.root.visible = bikeState.chaseView;
+    }
     if (
       e.code === 'Space' ||
       e.code === 'ArrowUp' ||
@@ -185,10 +218,18 @@ async function initApp(): Promise<void> {
     const dy = e.clientY - freeState.lastMouseY;
     freeState.lastMouseX = e.clientX;
     freeState.lastMouseY = e.clientY;
+    if (cameraMode === 'bike') {
+      if (bikeState.chaseView) {
+        bikeState.camOrbitYaw -= dx * 0.0052;
+        bikeState.camPitch = Math.max(0.06, Math.min(0.85, bikeState.camPitch + dy * 0.0042));
+      } else {
+        freeState.yaw -= dx * 0.0042;
+        freeState.pitch = Math.max(-0.45, Math.min(0.48, freeState.pitch - dy * 0.0035));
+      }
+      return;
+    }
     freeState.yaw -= dx * 0.0042;
-    const maxPitch = cameraMode === 'aerial' ? 1.35 : 0.48;
-    const minPitch = cameraMode === 'aerial' ? -1.45 : -0.45;
-    freeState.pitch = Math.max(minPitch, Math.min(maxPitch, freeState.pitch - dy * 0.0035));
+    freeState.pitch = Math.max(-1.45, Math.min(1.35, freeState.pitch - dy * 0.0035));
   });
 
   window.addEventListener('pointerup', () => {
@@ -198,10 +239,15 @@ async function initApp(): Promise<void> {
   renderer.domElement.addEventListener(
     'wheel',
     (e) => {
-      if (cameraMode !== 'aerial') return;
-      e.preventDefault();
-      const factor = e.deltaY < 0 ? 1.12 : 0.89;
-      freeState.aerialSpeed = Math.max(25, Math.min(320, freeState.aerialSpeed * factor));
+      if (cameraMode === 'aerial') {
+        e.preventDefault();
+        const factor = e.deltaY < 0 ? 1.12 : 0.89;
+        freeState.aerialSpeed = Math.max(25, Math.min(320, freeState.aerialSpeed * factor));
+      } else if (cameraMode === 'bike' && bikeState.chaseView) {
+        e.preventDefault();
+        const factor = e.deltaY < 0 ? 0.91 : 1.10;
+        bikeState.chaseDist = Math.max(3.6, Math.min(14.5, bikeState.chaseDist * factor));
+      }
     },
     { passive: false }
   );
@@ -225,17 +271,22 @@ async function initApp(): Promise<void> {
     el.append(dot, nameSpan);
     el.addEventListener('click', () => {
       if (cameraMode === 'bike') {
-        freeState.x = x;
-        freeState.z = z + 35;
-        freeState.y = terrain.getHeightAtXZ(freeState.x, freeState.z) + 1.85;
+        freeState.x = Math.max(worldBounds.minX, Math.min(worldBounds.maxX, x));
+        freeState.z = Math.max(worldBounds.minZ, Math.min(worldBounds.maxZ, z + 35));
+        const gy = terrain.getHeightAtXZ(freeState.x, freeState.z);
+        freeState.y = gy + 0.24;
         freeState.yaw = 0;
+        bikeState.speedMs = 0;
+        bikeState.camOrbitYaw = 0;
+        bikeState.camPos.set(freeState.x, gy + 3.2, freeState.z + bikeState.chaseDist);
+        bikeState.camLook.set(freeState.x, gy + 1.35, freeState.z - 8);
         return;
       }
       if (cameraMode === 'aerial') {
         const destGroundY = terrain.getHeightAtXZ(x, z + 160);
-        freeState.x = x;
+        freeState.x = Math.max(worldBounds.minX, Math.min(worldBounds.maxX, x));
         freeState.y = Math.max(freeState.y, destGroundY + 130);
-        freeState.z = z + 160;
+        freeState.z = Math.max(worldBounds.minZ, Math.min(worldBounds.maxZ, z + 160));
         freeState.yaw = 0;
         freeState.pitch = -0.45;
         return;
@@ -259,15 +310,16 @@ async function initApp(): Promise<void> {
 
     mapControls.enabled = mode === 'map';
     flightHud.hidden = mode === 'map';
+    fixieAvatar.root.visible = mode === 'bike' && bikeState.chaseView;
 
     if (mode === 'aerial') {
       camera.fov = 58;
       camera.updateProjectionMatrix();
       if (prevMode === 'map') {
-        freeState.x = camera.position.x;
-        freeState.z = camera.position.z;
+        freeState.x = Math.max(worldBounds.minX, Math.min(worldBounds.maxX, camera.position.x));
+        freeState.z = Math.max(worldBounds.minZ, Math.min(worldBounds.maxZ, camera.position.z));
         const minY = terrain.getHeightAtXZ(freeState.x, freeState.z) + 25;
-        freeState.y = Math.max(minY, Math.min(900, camera.position.y));
+        freeState.y = Math.max(minY, Math.min(1400, camera.position.y));
         const lookDir = new THREE.Vector3();
         camera.getWorldDirection(lookDir);
         freeState.yaw = Math.atan2(-lookDir.x, -lookDir.z);
@@ -283,20 +335,50 @@ async function initApp(): Promise<void> {
       flightHint.innerHTML =
         '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> mover · <kbd>Q</kbd><kbd>E</kbd> rotar · <kbd>Espacio</kbd> subir · <kbd>Ctrl</kbd> bajar · <kbd>Shift</kbd> turbo';
     } else if (mode === 'bike') {
-      camera.fov = 60;
+      camera.fov = 61;
       camera.updateProjectionMatrix();
       if (prevMode === 'map') {
-        freeState.x = mapControls.target.x;
-        freeState.z = mapControls.target.z + 40;
+        freeState.x = Math.max(worldBounds.minX, Math.min(worldBounds.maxX, mapControls.target.x));
+        freeState.z = Math.max(worldBounds.minZ, Math.min(worldBounds.maxZ, mapControls.target.z + 20));
+        const lookDir = new THREE.Vector3();
+        camera.getWorldDirection(lookDir);
+        freeState.yaw = Math.atan2(-lookDir.x, -lookDir.z);
       }
-      freeState.y = terrain.getHeightAtXZ(freeState.x, freeState.z) + 1.85;
+      const gy = terrain.getHeightAtXZ(freeState.x, freeState.z);
+      freeState.y = gy + 0.24;
       freeState.pitch = -0.02;
       freeState.velX = 0;
       freeState.velY = 0;
       freeState.velZ = 0;
+      bikeState.speedMs = 0;
+      bikeState.camOrbitYaw = 0;
+      const fwdX = -Math.sin(freeState.yaw);
+      const fwdZ = -Math.cos(freeState.yaw);
+      bikeState.camPos.set(
+        freeState.x - fwdX * bikeState.chaseDist,
+        gy + 3.0,
+        freeState.z - fwdZ * bikeState.chaseDist
+      );
+      bikeState.camLook.set(freeState.x + fwdX * 8, gy + 1.35, freeState.z + fwdZ * 8);
+      fixieAvatar.update(
+        {
+          speedMs: 0,
+          steerAngle: 0,
+          leanAngle: 0,
+          crankAngle: bikeState.crankAngle,
+          slopePitch: 0,
+          isSprinting: false,
+          isSkidding: false,
+          driftSlipAngle: 0,
+        },
+        freeState.yaw,
+        freeState.x,
+        freeState.y,
+        freeState.z
+      );
       flightModeLabel.textContent = 'Fixie (Calle)';
       flightHint.innerHTML =
-        'Usa <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> o <kbd>Q</kbd>/<kbd>E</kbd> para pedalear y girar · Arrastra para mirar · <kbd>Shift</kbd> sprint';
+        '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> pedalear/girar · <kbd>Espacio</kbd> derrapar · <kbd>Shift</kbd> sprint · <kbd>C</kbd> cámara · Rueda zoom';
     } else {
       camera.fov = 48;
       camera.updateProjectionMatrix();
@@ -434,8 +516,8 @@ async function initApp(): Promise<void> {
       freeState.velY += (targetVY - freeState.velY) * damp;
       freeState.velZ += (targetVZ - freeState.velZ) * damp;
 
-      freeState.x = Math.max(-2000, Math.min(2000, freeState.x + freeState.velX * dt));
-      freeState.z = Math.max(-1700, Math.min(1700, freeState.z + freeState.velZ * dt));
+      freeState.x = Math.max(worldBounds.minX, Math.min(worldBounds.maxX, freeState.x + freeState.velX * dt));
+      freeState.z = Math.max(worldBounds.minZ, Math.min(worldBounds.maxZ, freeState.z + freeState.velZ * dt));
       const aerialGroundY = terrain.getHeightAtXZ(freeState.x, freeState.z);
       const minAerialY = aerialGroundY + 5;
       freeState.y = Math.max(minAerialY, Math.min(1400, freeState.y + freeState.velY * dt));
@@ -458,49 +540,140 @@ async function initApp(): Promise<void> {
       flightAltEl.textContent = `${agl.toFixed(0)} m AGL · ${absElev.toFixed(0)} m s.n.m.`;
       flightSpeedEl.textContent = `${(totalSpeed * 3.6).toFixed(0)} km/h`;
     } else {
-      const sprint = keys.has('ShiftLeft') || keys.has('ShiftRight') ? 1.85 : 1.0;
+      const sprint = keys.has('ShiftLeft') || keys.has('ShiftRight');
       const forwardInput =
         (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) -
         (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
       const turnInput =
         (keys.has('KeyA') || keys.has('ArrowLeft') || keys.has('KeyQ') ? 1 : 0) -
         (keys.has('KeyD') || keys.has('ArrowRight') || keys.has('KeyE') ? 1 : 0);
+      const skidInput = keys.has('Space');
 
-      freeState.yaw += turnInput * 1.9 * dt;
       const dirX = -Math.sin(freeState.yaw);
       const dirZ = -Math.cos(freeState.yaw);
       const gradePct = terrain.getSlopeGradeAtXZ(freeState.x, freeState.z, dirX, dirZ);
 
-      const baseTarget = forwardInput * 17.0 * sprint;
-      const targetSpeed =
-        forwardInput !== 0
-          ? Math.max(4, Math.abs(baseTarget) - gradePct * 0.25) * Math.sign(baseTarget)
-          : 0;
-      freeState.velX += (targetSpeed - freeState.velX) * Math.min(1, dt * 6.5);
+      const isSkidding = skidInput && bikeState.speedMs > 2.2;
+      if (isSkidding) {
+        bikeState.speedMs = Math.max(0, bikeState.speedMs - 14.5 * dt);
+      } else if (forwardInput > 0) {
+        const cruiseMax = (sprint ? 15.8 : 11.0) - gradePct * 0.22;
+        const targetSpeed = Math.max(5.5, cruiseMax);
+        bikeState.speedMs += (targetSpeed - bikeState.speedMs) * Math.min(1, dt * 4.5);
+      } else if (forwardInput < 0) {
+        if (bikeState.speedMs > 0.6) {
+          bikeState.speedMs = Math.max(0, bikeState.speedMs - 18.0 * dt);
+        } else {
+          bikeState.speedMs += (-4.2 - bikeState.speedMs) * Math.min(1, dt * 6.0);
+        }
+      } else {
+        // Inercia suave rodando al dejar de pedalear
+        bikeState.speedMs *= Math.exp(-dt * 1.35);
+        if (Math.abs(bikeState.speedMs) < 0.08) bikeState.speedMs = 0;
+      }
 
-      freeState.x = Math.max(-1800, Math.min(1800, freeState.x + dirX * freeState.velX * dt));
-      freeState.z = Math.max(-1500, Math.min(1500, freeState.z + dirZ * freeState.velX * dt));
+      const baseTurnRate = 2.45 - Math.min(0.85, Math.abs(bikeState.speedMs) * 0.045);
+      const turnRate = isSkidding ? baseTurnRate * 1.65 : baseTurnRate;
+      const reverseSign = bikeState.speedMs < -0.5 ? -1 : 1;
+      freeState.yaw += turnInput * turnRate * reverseSign * dt;
+
+      const nextDirX = -Math.sin(freeState.yaw);
+      const nextDirZ = -Math.cos(freeState.yaw);
+
+      freeState.x = Math.max(worldBounds.minX, Math.min(worldBounds.maxX, freeState.x + nextDirX * bikeState.speedMs * dt));
+      freeState.z = Math.max(worldBounds.minZ, Math.min(worldBounds.maxZ, freeState.z + nextDirZ * bikeState.speedMs * dt));
 
       const groundY = terrain.getHeightAtXZ(freeState.x, freeState.z);
-      const bikeY = groundY + 1.85;
+      const bikeY = groundY + 0.24;
       freeState.y = bikeY;
 
-      const aheadY = terrain.getHeightAtXZ(freeState.x + dirX * 25, freeState.z + dirZ * 25) + 1.85;
-      camera.position.set(freeState.x, bikeY, freeState.z);
-      lookTarget.set(
-        freeState.x + dirX * 25,
-        aheadY + Math.sin(freeState.pitch) * 25,
-        freeState.z + dirZ * 25
-      );
-      camera.lookAt(lookTarget);
+      // Estado visual del avatar fixie
+      const targetSteer = turnInput * (0.44 - Math.min(0.24, Math.abs(bikeState.speedMs) * 0.015));
+      const targetLean = turnInput * Math.min(0.42, Math.abs(bikeState.speedMs) * 0.032) * (isSkidding ? 1.25 : 1.0);
+      const targetSlopePitch = Math.atan(gradePct / 100);
+      const targetDrift = isSkidding ? turnInput * 0.34 : 0;
 
-      focusX = freeState.x;
-      focusZ = freeState.z;
+      const animSmooth = Math.min(1, dt * 12);
+      bikeState.steerAngle += (targetSteer - bikeState.steerAngle) * animSmooth;
+      bikeState.leanAngle += (targetLean - bikeState.leanAngle) * animSmooth;
+      bikeState.slopePitch += (targetSlopePitch - bikeState.slopePitch) * Math.min(1, dt * 8);
+      bikeState.driftSlipAngle += (targetDrift - bikeState.driftSlipAngle) * Math.min(1, dt * 9);
+
+      if (!isSkidding) {
+        bikeState.crankAngle += (bikeState.speedMs / 0.85) * dt;
+      }
+
+      fixieAvatar.update(
+        {
+          speedMs: bikeState.speedMs,
+          steerAngle: bikeState.steerAngle,
+          leanAngle: bikeState.leanAngle,
+          crankAngle: bikeState.crankAngle,
+          slopePitch: bikeState.slopePitch,
+          isSprinting: sprint && forwardInput > 0 && !isSkidding,
+          isSkidding,
+          driftSlipAngle: bikeState.driftSlipAngle,
+        },
+        freeState.yaw,
+        freeState.x,
+        bikeY,
+        freeState.z
+      );
+
+      if (bikeState.chaseView) {
+        if (!freeState.isDragging && Math.abs(bikeState.speedMs) > 1.8) {
+          bikeState.camOrbitYaw *= Math.exp(-dt * 2.4);
+        }
+        const camYaw = freeState.yaw + bikeState.camOrbitYaw;
+        const camDirX = -Math.sin(camYaw);
+        const camDirZ = -Math.cos(camYaw);
+
+        const horizDist = bikeState.chaseDist * Math.cos(bikeState.camPitch);
+        const vertOffset = 1.25 + bikeState.chaseDist * Math.sin(bikeState.camPitch);
+        const idealCamX = freeState.x - camDirX * horizDist;
+        const idealCamZ = freeState.z - camDirZ * horizDist;
+        const camGround = terrain.getHeightAtXZ(idealCamX, idealCamZ);
+        const idealCamY = Math.max(camGround + 1.05, bikeY + vertOffset);
+
+        const camLerp = Math.min(1, dt * 11);
+        bikeState.camPos.x += (idealCamX - bikeState.camPos.x) * camLerp;
+        bikeState.camPos.y += (idealCamY - bikeState.camPos.y) * camLerp;
+        bikeState.camPos.z += (idealCamZ - bikeState.camPos.z) * camLerp;
+
+        const idealLookX = freeState.x + nextDirX * 7.5;
+        const idealLookY = bikeY + 1.35 + gradePct * 0.05;
+        const idealLookZ = freeState.z + nextDirZ * 7.5;
+        bikeState.camLook.x += (idealLookX - bikeState.camLook.x) * Math.min(1, dt * 14);
+        bikeState.camLook.y += (idealLookY - bikeState.camLook.y) * Math.min(1, dt * 14);
+        bikeState.camLook.z += (idealLookZ - bikeState.camLook.z) * Math.min(1, dt * 14);
+
+        camera.position.copy(bikeState.camPos);
+        camera.lookAt(bikeState.camLook);
+
+        const targetFov = sprint && bikeState.speedMs > 9 ? 67 : 61;
+        if (Math.abs(camera.fov - targetFov) > 0.05) {
+          camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 6);
+          camera.updateProjectionMatrix();
+        }
+      } else {
+        const headY = bikeY + 1.55;
+        const aheadY = terrain.getHeightAtXZ(freeState.x + nextDirX * 25, freeState.z + nextDirZ * 25) + 1.55;
+        camera.position.set(freeState.x, headY, freeState.z);
+        lookTarget.set(
+          freeState.x + nextDirX * 25,
+          aheadY + Math.sin(freeState.pitch) * 25,
+          freeState.z + nextDirZ * 25
+        );
+        camera.lookAt(lookTarget);
+      }
+
+      focusX = freeState.x + nextDirX * 120;
+      focusZ = freeState.z + nextDirZ * 120;
 
       const absGround = terrain.getAbsoluteElevationAtXZ(freeState.x, freeState.z);
       const gradeSign = gradePct >= 0.05 ? '+' : '';
       flightAltEl.textContent = `${Math.round(absGround)} m · ${gradeSign}${gradePct.toFixed(1)}%`;
-      flightSpeedEl.textContent = `${Math.abs(freeState.velX * 3.6).toFixed(0)} km/h`;
+      flightSpeedEl.textContent = `${Math.abs(bikeState.speedMs * 3.6).toFixed(0)} km/h`;
     }
 
     // Reubicar luz direccional solo cada 60 m para no invalidar el mapa de sombras continuamente
