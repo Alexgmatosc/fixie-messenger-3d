@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>Madrid Fixie Messenger — Mapa 3D con Spatial Chunk Streaming</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <div id="canvas-container" aria-label="Visor de mapa 3D de Madrid"></div>
+
+      <div id="poi-layer" aria-live="polite"></div>
+
+      <header class="hud-header glass-panel">
+        <div class="brand">
+          <span class="brand-dot" aria-hidden="true"></span>
+          <div>
+            <h1>Madrid 3D · Centro Expandido</h1>
+            <p class="subtitle" id="map-subtitle">Cargando manifiesto espacial...</p>
+          </div>
+        </div>
+
+        <div class="controls-row">
+          <div class="segmented" role="group" aria-label="Modo de cámara">
+            <button type="button" class="seg-btn active" id="btn-cam-map">Mapa 3D</button>
+            <button type="button" class="seg-btn" id="btn-cam-aerial">Aérea (Dron)</button>
+            <button type="button" class="seg-btn" id="btn-cam-bike">Fixie (Calle)</button>
+          </div>
+
+          <button type="button" class="toggle-btn active" id="btn-pois" aria-pressed="true">
+            POIs
+          </button>
+        </div>
+      </header>
+
+      <aside class="hud-telemetry glass-panel" aria-label="Telemetría de streaming y renderizado">
+        <div class="stat">
+          <span class="stat-label">Backend</span>
+          <span class="stat-val" id="stat-backend">—</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Chunks</span>
+          <span class="stat-val accent" id="stat-chunks">—</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Draw Calls</span>
+          <span class="stat-val" id="stat-calls">—</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">FPS</span>
+          <span class="stat-val" id="stat-fps">—</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Edificios</span>
+          <span class="stat-val" id="stat-buildings">—</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Árboles</span>
+          <span class="stat-val" id="stat-trees">—</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Altitud s.n.m.</span>
+          <span class="stat-val" id="stat-elev">—</span>
+        </div>
+      </aside>
+
+      <div class="hud-rider glass-panel" id="flight-hud" hidden>
+        <div class="rider-metrics">
+          <span>Modo: <strong id="flight-mode-label">Dron</strong></span>
+          <span>Altitud: <strong id="flight-alt">120 m</strong></span>
+          <span>Velocidad: <strong id="flight-speed">0 km/h</strong></span>
+        </div>
+        <p class="rider-hint" id="flight-hint">
+          <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> mover · <kbd>Q</kbd><kbd>E</kbd> rotar · <kbd>Espacio</kbd> subir · <kbd>Ctrl</kbd> bajar · <kbd>Shift</kbd> turbo
+        </p>
+      </div>
+
+      <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-card glass-panel">
+          <div class="spinner" aria-hidden="true"></div>
+          <p id="loading-status">Inicializando WebGPU y Spatial Chunk Streaming...</p>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

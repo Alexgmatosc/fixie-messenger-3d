@@ -1,0 +1,20 @@
+{
+  "name": "madrid-fixie-3d-map",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5173",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "fetch-map": "node scripts/fetch-madrid-data.mjs"
+  },
+  "dependencies": {
+    "three": "^0.175.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.175.0",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.0"
+  }
+}
