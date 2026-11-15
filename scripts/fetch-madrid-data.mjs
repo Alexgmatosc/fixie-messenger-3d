@@ -8,14 +8,18 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 const DATA_DIR = path.join(PROJECT_ROOT, 'public', 'data');
 const CHUNKS_DIR = path.join(DATA_DIR, 'chunks');
 
-// Gran recorte del centro de Madrid (~3.39 km x 2.76 km = ~9.35 km²):
-// Palacio Real / Plaza de España <-> Retiro Este, Atocha <-> Alonso Martínez / Colón
-const BBOX = {
-  minLon: -3.7150,
-  minLat: 40.4050,
-  maxLon: -3.6750,
-  maxLat: 40.4300,
+const OSM_CACHE_DIR = path.join(__dirname, '.cache-osm');
+
+// Recorte completo interior de la M-30 (Almendra Central de Madrid, ~44 km²)
+// BBOX se ajusta dinámicamente al anillo M-30 + margen de ~260 m
+let BBOX = {
+  minLon: -3.7510,
+  minLat: 40.3820,
+  maxLon: -3.6570,
+  maxLat: 40.4870,
 };
+
+let M30_RING_LONLAT = null;
 
 const ORIGIN = {
   lon: -3.6941,
@@ -27,6 +31,8 @@ const METERS_PER_DEG_LON = 111320 * Math.cos((ORIGIN.lat * Math.PI) / 180);
 const METERS_PER_DEG_LAT = 110540;
 
 const ROAD_HIGHWAYS = new Set([
+  'motorway',
+  'motorway_link',
   'trunk',
   'primary',
   'primary_link',
@@ -169,12 +175,36 @@ function computeBuildingProps(id, tags, isPart, outerRing) {
   return props;
 }
 
+function pointInRingLonLat(lon, lat, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0];
+    const yi = ring[i][1];
+    const xj = ring[j][0];
+    const yj = ring[j][1];
+    const intersect = yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi + 1e-12) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
 function isInsideBbox(lon, lat, pad = 0.0005) {
+  if (
+    lon < BBOX.minLon - pad ||
+    lon > BBOX.maxLon + pad ||
+    lat < BBOX.minLat - pad ||
+    lat > BBOX.maxLat + pad
+  ) {
+    return false;
+  }
+  if (!M30_RING_LONLAT) return true;
+  if (pointInRingLonLat(lon, lat, M30_RING_LONLAT)) return true;
+  if (pad <= 0) return false;
   return (
-    lon >= BBOX.minLon - pad &&
-    lon <= BBOX.maxLon + pad &&
-    lat >= BBOX.minLat - pad &&
-    lat <= BBOX.maxLat + pad
+    pointInRingLonLat(lon + pad, lat, M30_RING_LONLAT) ||
+    pointInRingLonLat(lon - pad, lat, M30_RING_LONLAT) ||
+    pointInRingLonLat(lon, lat + pad, M30_RING_LONLAT) ||
+    pointInRingLonLat(lon, lat - pad, M30_RING_LONLAT)
   );
 }
 
@@ -266,34 +296,195 @@ function createCircleRing(centerLon, centerLat, radiusMeters, segments = 28) {
   return ring;
 }
 
-async function fetchTile(tileBbox, label) {
+const DEFAULT_M30_RING = [
+  [-3.661, 40.428], [-3.659, 40.441], [-3.662, 40.456], [-3.671, 40.471],
+  [-3.686, 40.484], [-3.699, 40.484], [-3.713, 40.479], [-3.732, 40.467],
+  [-3.746, 40.453], [-3.743, 40.436], [-3.735, 40.422], [-3.726, 40.411],
+  [-3.721, 40.399], [-3.709, 40.389], [-3.692, 40.385], [-3.676, 40.391],
+  [-3.666, 40.402], [-3.662, 40.415], [-3.661, 40.428],
+];
+
+function buildRadialM30Ring(points) {
+  const cx = -3.696;
+  const cy = 40.428;
+  const mx = METERS_PER_DEG_LON;
+  const my = METERS_PER_DEG_LAT;
+  const bins = Array.from({ length: 72 }, () => []);
+
+  for (const [lon, lat] of points) {
+    const dx = (lon - cx) * mx;
+    const dy = (lat - cy) * my;
+    const r = Math.hypot(dx, dy);
+    if (r < 2200 || r > 7400) continue;
+    let a = Math.atan2(dy, dx);
+    if (a < 0) a += Math.PI * 2;
+    const b = Math.min(71, Math.floor((a / (Math.PI * 2)) * 72));
+    bins[b].push({ lon, lat, dx, dy, r });
+  }
+
+  const built = [];
+  for (let b = 0; b < 72; b++) {
+    if (!bins[b].length) continue;
+    bins[b].sort((u, v) => u.r - v.r);
+    const pick = bins[b][Math.floor(bins[b].length * 0.3)];
+    const scale = (pick.r + 260) / pick.r;
+    built.push([
+      roundCoord(cx + (pick.dx * scale) / mx),
+      roundCoord(cy + (pick.dy * scale) / my),
+    ]);
+  }
+  if (built.length >= 24) {
+    built.push(built[0]);
+    return built;
+  }
+  return null;
+}
+
+async function initM30Boundary() {
+  const m30CacheFile = path.join(OSM_CACHE_DIR, 'm30-boundary.json');
+  await fs.mkdir(OSM_CACHE_DIR, { recursive: true });
+
+  let ring = null;
+  try {
+    const cached = JSON.parse(await fs.readFile(m30CacheFile, 'utf8'));
+    if (Array.isArray(cached) && cached.length >= 24) {
+      ring = cached;
+      console.log(`Polígono M-30 cargado de caché (${ring.length} vértices).`);
+    }
+  } catch {
+    // sin caché previo
+  }
+
+  if (!ring) {
+    const endpoints = [
+      'https://overpass-api.de/api/interpreter',
+      'https://overpass.kumi.systems/api/interpreter',
+    ];
+    const q = `[out:json][timeout:30];way["ref"="M-30"]["highway"~"motorway|trunk"](40.38,-3.755,40.495,-3.65);out geom;`;
+    for (const ep of endpoints) {
+      try {
+        const res = await fetch(ep, {
+          method: 'POST',
+          headers: {
+            'User-Agent': 'FixieMessenger3D/1.0',
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: 'data=' + encodeURIComponent(q),
+          signal: AbortSignal.timeout(25000),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const d = await res.json();
+        const pts = [];
+        for (const el of d.elements || []) {
+          for (const p of el.geometry || []) {
+            pts.push([p.lon, p.lat]);
+          }
+        }
+        ring = buildRadialM30Ring(pts);
+        if (ring) {
+          await fs.writeFile(m30CacheFile, JSON.stringify(ring));
+          console.log(`Polígono real M-30 extraído desde OSM (${ring.length} vértices).`);
+          break;
+        }
+      } catch (err) {
+        console.warn(`Mirror Overpass (${ep}) no disponible: ${err.message}`);
+      }
+    }
+  }
+
+  if (!ring) {
+    console.warn('Usando polígono M-30 por defecto para filtrado inicial de tiles.');
+    ring = DEFAULT_M30_RING;
+  }
+
+  M30_RING_LONLAT = ring;
+}
+
+function tileIntersectsM30(tileBbox) {
+  if (!M30_RING_LONLAT) return true;
+  const [minLon, minLat, maxLon, maxLat] = tileBbox;
+  for (let i = 0; i <= 2; i++) {
+    const lon = minLon + ((maxLon - minLon) * i) / 2;
+    for (let j = 0; j <= 2; j++) {
+      const lat = minLat + ((maxLat - minLat) * j) / 2;
+      if (pointInRingLonLat(lon, lat, M30_RING_LONLAT)) return true;
+    }
+  }
+  for (const [vx, vy] of M30_RING_LONLAT) {
+    if (vx >= minLon && vx <= maxLon && vy >= minLat && vy <= maxLat) return true;
+  }
+  return false;
+}
+
+async function fetchTile(tileBbox, label, depth = 0) {
+  const cacheKey = tileBbox.map((v) => v.toFixed(5)).join('_');
+  const cacheFile = path.join(OSM_CACHE_DIR, `tile_${cacheKey}.json`);
+  try {
+    const cached = JSON.parse(await fs.readFile(cacheFile, 'utf8'));
+    if (Array.isArray(cached)) {
+      return { elements: cached, fromCache: true };
+    }
+  } catch {
+    // no está en caché
+  }
+
   const url = `https://api.openstreetmap.org/api/0.6/map.json?bbox=${tileBbox.join(',')}`;
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; attempt <= 5; attempt++) {
     try {
       const res = await fetch(url, {
         headers: {
-          'User-Agent': 'MadridFixie3D/1.0 (https://github.com/local/madrid-fixie-3d)',
+          'User-Agent': 'FixieMessenger3D/1.0 (https://github.com/Alexgmatosc/fixie-messenger-3d)',
           Accept: 'application/json',
         },
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(40000),
       });
+      if (res.status === 400 && depth < 2) {
+        console.warn(`  [${label}] >50k nodos (HTTP 400); subdividiendo en 4 sub-tiles...`);
+        const [minLon, minLat, maxLon, maxLat] = tileBbox;
+        const midLon = roundCoord((minLon + maxLon) * 0.5);
+        const midLat = roundCoord((minLat + maxLat) * 0.5);
+        const subs = [
+          [minLon, minLat, midLon, midLat],
+          [midLon, minLat, maxLon, midLat],
+          [minLon, midLat, midLon, maxLat],
+          [midLon, midLat, maxLon, maxLat],
+        ];
+        const merged = [];
+        for (let s = 0; s < subs.length; s++) {
+          const part = await fetchTile(subs[s], `${label}.${s + 1}`, depth + 1);
+          merged.push(...part.elements);
+          if (!part.fromCache) await new Promise((r) => setTimeout(r, 450));
+        }
+        await fs.writeFile(cacheFile, JSON.stringify(merged));
+        return { elements: merged, fromCache: false };
+      }
+      if (res.status === 429 || res.status >= 500) {
+        const retryAfter = Number(res.headers.get('retry-after')) || 0;
+        const waitMs = Math.max(retryAfter * 1000, 12000 * attempt);
+        if (attempt === 5) throw new Error(`HTTP ${res.status}`);
+        console.warn(`  [${label}] HTTP ${res.status}, esperando ${(waitMs / 1000).toFixed(0)}s (reintento ${attempt}/5)...`);
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       if (!Array.isArray(json.elements)) throw new Error('Sin elements');
+      await fs.writeFile(cacheFile, JSON.stringify(json.elements));
       console.log(`  [${label}] OK (${json.elements.length} elementos)`);
-      return json.elements;
+      return { elements: json.elements, fromCache: false };
     } catch (err) {
-      if (attempt === 3) throw err;
-      console.warn(`  [${label}] Reintento ${attempt}/3 (${err.message})...`);
-      await new Promise((r) => setTimeout(r, 1200 * attempt));
+      if (attempt === 5) throw err;
+      const waitMs = 8000 * attempt;
+      console.warn(`  [${label}] Reintento ${attempt}/5 (${err.message}) en ${(waitMs / 1000).toFixed(0)}s...`);
+      await new Promise((r) => setTimeout(r, waitMs));
     }
   }
-  return [];
+  return { elements: [], fromCache: false };
 }
 
 async function fetchTiledOsmElements() {
-  const cols = 4;
-  const rows = 3;
+  const cols = 12;
+  const rows = 14;
   const dLon = (BBOX.maxLon - BBOX.minLon) / cols;
   const dLat = (BBOX.maxLat - BBOX.minLat) / rows;
 
@@ -306,40 +497,66 @@ async function fetchTiledOsmElements() {
         roundCoord(BBOX.minLon + (c + 1) * dLon),
         roundCoord(BBOX.minLat + (r + 1) * dLat),
       ];
-      tasks.push({ tile, label: `tile ${r * cols + c + 1}/${cols * rows}` });
+      if (!tileIntersectsM30(tile)) continue;
+      tasks.push({ tile, label: `tile ${tasks.length + 1}` });
     }
   }
 
-  console.log(`Descargando centro de Madrid en ${tasks.length} tiles (3.39 km x 2.76 km)...`);
+  console.log(`Descargando Madrid interior M-30 en ${tasks.length} tiles (filtrados al contorno M-30)...`);
 
   const nodeMap = new Map();
   const wayMap = new Map();
   const relationMap = new Map();
   const treeMap = new Map();
 
-  // Concurrencia controlada de 3 peticiones simultáneas
-  const concurrency = 3;
-  for (let i = 0; i < tasks.length; i += concurrency) {
-    const batch = tasks.slice(i, i + concurrency);
-    const results = await Promise.all(batch.map((t) => fetchTile(t.tile, t.label)));
-    for (const elements of results) {
-      for (const el of elements) {
-        if (el.type === 'node') {
-          nodeMap.set(el.id, [el.lon, el.lat]);
-          if (el.tags?.natural === 'tree' && isInsideBbox(el.lon, el.lat, 0.0001)) {
-            treeMap.set(el.id, [roundCoord(el.lon), roundCoord(el.lat)]);
-          }
-        } else if (el.type === 'way') {
-          wayMap.set(el.id, el);
-        } else if (el.type === 'relation') {
-          relationMap.set(el.id, el);
+  let cacheHits = 0;
+  for (let i = 0; i < tasks.length; i++) {
+    const t = tasks[i];
+    const { elements, fromCache } = await fetchTile(t.tile, `${t.label}/${tasks.length}`);
+    if (fromCache) cacheHits++;
+
+    for (const el of elements) {
+      if (el.type === 'node') {
+        nodeMap.set(el.id, [el.lon, el.lat]);
+        if (el.tags?.natural === 'tree' && isInsideBbox(el.lon, el.lat, 0.0001)) {
+          treeMap.set(el.id, [roundCoord(el.lon), roundCoord(el.lat)]);
         }
+      } else if (el.type === 'way') {
+        wayMap.set(el.id, el);
+      } else if (el.type === 'relation') {
+        relationMap.set(el.id, el);
       }
+    }
+
+    if (!fromCache && i + 1 < tasks.length) {
+      await new Promise((r) => setTimeout(r, 450));
+    }
+  }
+
+  // Refinar contorno M-30 directamente desde los ways M-30 ya descargados
+  const localM30Pts = [];
+  for (const w of wayMap.values()) {
+    const tags = w.tags || {};
+    if (tags.ref === 'M-30' && (tags.highway === 'motorway' || tags.highway === 'trunk')) {
+      for (const nid of w.nodes || []) {
+        const pt = nodeMap.get(nid);
+        if (pt) localM30Pts.push(pt);
+      }
+    }
+  }
+  const exactLocalRing = buildRadialM30Ring(localM30Pts);
+  if (exactLocalRing) {
+    M30_RING_LONLAT = exactLocalRing;
+    await fs.writeFile(path.join(OSM_CACHE_DIR, 'm30-boundary.json'), JSON.stringify(exactLocalRing));
+    console.log(`Contorno M-30 refinado desde los datos locales (${exactLocalRing.length} vértices).`);
+    // Re-filtrar árboles respecto al anillo exacto
+    for (const [tid, [tlon, tlat]] of treeMap.entries()) {
+      if (!isInsideBbox(tlon, tlat, 0.0001)) treeMap.delete(tid);
     }
   }
 
   console.log(
-    `Elementos unicos totales: ${nodeMap.size} nodos, ${wayMap.size} vias, ${relationMap.size} relaciones.`
+    `Elementos unicos totales (${cacheHits} tiles de caché): ${nodeMap.size} nodos, ${wayMap.size} vias, ${relationMap.size} relaciones.`
   );
   return { nodeMap, wayMap, relationMap, trees: Array.from(treeMap.values()) };
 }
@@ -478,15 +695,19 @@ async function fetchTerrariumDemGrid(cols, rows, demBbox) {
 
   console.log(`Descargando ${tileCoords.length} tiles Terrarium DEM z=${zoom} (~3,5 m/px)...`);
   const tiles = new Map();
-  await Promise.all(
-    tileCoords.map(async ({ tx, ty }) => {
-      const url = `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${zoom}/${tx}/${ty}.png`;
-      const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
-      if (!res.ok) throw new Error(`Terrarium HTTP ${res.status} en ${tx}/${ty}`);
-      const buf = Buffer.from(await res.arrayBuffer());
-      tiles.set(`${tx}_${ty}`, decodePng(buf));
-    })
-  );
+  const demConcurrency = 10;
+  for (let i = 0; i < tileCoords.length; i += demConcurrency) {
+    const batch = tileCoords.slice(i, i + demConcurrency);
+    await Promise.all(
+      batch.map(async ({ tx, ty }) => {
+        const url = `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${zoom}/${tx}/${ty}.png`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(25000) });
+        if (!res.ok) throw new Error(`Terrarium HTTP ${res.status} en ${tx}/${ty}`);
+        const buf = Buffer.from(await res.arrayBuffer());
+        tiles.set(`${tx}_${ty}`, decodePng(buf));
+      })
+    );
+  }
 
   function sampleTilePixelElevation(globalPx, globalPy) {
     const tx = Math.floor(globalPx / 256);
@@ -606,8 +827,8 @@ async function fetchOpenMeteoDemFallback(cols, rows, demBbox) {
 }
 
 async function fetchHighResDemGrid() {
-  const cols = 140;
-  const rows = 116;
+  const cols = 220;
+  const rows = 290;
   const demBbox = [
     roundCoord(BBOX.minLon - 0.002),
     roundCoord(BBOX.minLat - 0.002),
@@ -661,6 +882,8 @@ async function fetchHighResDemGrid() {
 }
 
 async function main() {
+  await initM30Boundary();
+
   const demOnly = process.argv.includes('--dem-only');
   const manifestPath = path.join(CHUNKS_DIR, 'manifest.json');
   if (demOnly) {
@@ -672,9 +895,6 @@ async function main() {
     console.log(`DEM inyectado correctamente en ${manifestPath}`);
     return;
   }
-
-  await fs.rm(CHUNKS_DIR, { recursive: true, force: true });
-  await fs.mkdir(CHUNKS_DIR, { recursive: true });
 
   const [{ nodeMap, wayMap, relationMap, trees }, dem] = await Promise.all([
     fetchTiledOsmElements(),
@@ -996,6 +1216,9 @@ async function main() {
     const { cx, cz, key } = chunkKeyForXZ(x, z);
     getOrCreateChunk(cx, cz, key).roads.push(r);
   }
+
+  await fs.rm(CHUNKS_DIR, { recursive: true, force: true });
+  await fs.mkdir(CHUNKS_DIR, { recursive: true });
 
   const chunkEntries = [];
   await Promise.all(

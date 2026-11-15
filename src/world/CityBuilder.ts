@@ -140,9 +140,22 @@ export function buildBaseGroundMesh(
   resources: SharedCityResources,
   terrain: TerrainElevation
 ): THREE.Mesh {
-  const geom = new THREE.PlaneGeometry(3800, 3200, 160, 135);
+  const [minLon, minLat, maxLon, maxLat] = terrain.bbox;
+  const [minX, maxZ] = projectToMeters(minLon, minLat);
+  const [maxX, minZ] = projectToMeters(maxLon, maxLat);
+
+  const marginM = 1200;
+  const widthM = Math.max(4000, maxX - minX + marginM * 2);
+  const depthM = Math.max(4000, maxZ - minZ + marginM * 2);
+  const centerX = (minX + maxX) * 0.5;
+  const centerZ = (minZ + maxZ) * 0.5;
+
+  const segsX = Math.min(300, Math.max(120, Math.round(widthM / 36)));
+  const segsZ = Math.min(380, Math.max(120, Math.round(depthM / 36)));
+
+  const geom = new THREE.PlaneGeometry(widthM, depthM, segsX, segsZ);
   geom.rotateX(-Math.PI / 2);
-  geom.translate(-80, 0, -250);
+  geom.translate(centerX, 0, centerZ);
 
   const posAttr = geom.getAttribute('position');
   for (let i = 0; i < posAttr.count; i++) {
@@ -277,6 +290,12 @@ interface RoadStyleInfo {
 function getRoadStyle(road: RoadFeature, roadIdx = 0): RoadStyleInfo {
   const hw = road.highway;
   const stagger = (roadIdx % 19) * 0.0008;
+
+  if (hw === 'motorway' || hw === 'motorway_link') {
+    const width = hw === 'motorway_link' ? 7.5 : road.lanes >= 4 ? 14.5 : 11.5;
+    const laneCount = hw === 'motorway_link' ? 0 : road.lanes >= 4 ? 3 : 2;
+    return { width, roadClass: 3, laneCount, baseY: 0.255 + stagger };
+  }
 
   if (hw === 'trunk' || hw === 'primary' || hw === 'primary_link') {
     const width = road.oneway

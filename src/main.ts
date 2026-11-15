@@ -9,16 +9,18 @@ import { buildBaseGroundMesh, createSharedCityResources } from './world/CityBuil
 const POIS: PoiDefinition[] = [
   { id: 'neptuno', label: 'Fuente de Neptuno', lon: -3.6941, lat: 40.4152, heightOffsetM: 10, category: 'landmark' },
   { id: 'prado', label: 'Museo del Prado', lon: -3.6921, lat: 40.4138, heightOffsetM: 26, category: 'landmark' },
-  { id: 'botanico', label: 'Real Jardín Botánico', lon: -3.6911, lat: 40.4113, heightOffsetM: 12, category: 'park' },
-  { id: 'letras', label: 'Barrio de las Letras', lon: -3.6977, lat: 40.4141, heightOffsetM: 26, category: 'neighborhood' },
-  { id: 'congreso', label: 'Congreso de los Diputados', lon: -3.6967, lat: 40.4167, heightOffsetM: 24, category: 'landmark' },
-  { id: 'thyssen', label: 'Museo Thyssen-Bornemisza', lon: -3.6949, lat: 40.4160, heightOffsetM: 24, category: 'landmark' },
   { id: 'cibeles', label: 'Plaza de Cibeles', lon: -3.6930, lat: 40.4193, heightOffsetM: 18, category: 'landmark' },
   { id: 'alcala', label: 'Puerta de Alcalá', lon: -3.6887, lat: 40.4200, heightOffsetM: 24, category: 'landmark' },
   { id: 'retiro', label: 'Estanque del Retiro', lon: -3.6836, lat: 40.4173, heightOffsetM: 14, category: 'park' },
   { id: 'atocha', label: 'Estación de Atocha', lon: -3.6907, lat: 40.4068, heightOffsetM: 26, category: 'landmark' },
   { id: 'sol', label: 'Puerta del Sol', lon: -3.7038, lat: 40.4169, heightOffsetM: 24, category: 'neighborhood' },
   { id: 'palacio', label: 'Palacio Real', lon: -3.7143, lat: 40.4179, heightOffsetM: 34, category: 'landmark' },
+  { id: 'debod', label: 'Templo de Debod / Pza. España', lon: -3.7177, lat: 40.4241, heightOffsetM: 24, category: 'park' },
+  { id: 'azca', label: 'AZCA / Bernabéu', lon: -3.6915, lat: 40.4508, heightOffsetM: 48, category: 'landmark' },
+  { id: 'castilla', label: 'Plaza de Castilla', lon: -3.6893, lat: 40.4668, heightOffsetM: 42, category: 'landmark' },
+  { id: 'ventas', label: 'Plaza de Las Ventas', lon: -3.6633, lat: 40.4321, heightOffsetM: 28, category: 'landmark' },
+  { id: 'matadero', label: 'Matadero / Madrid Río', lon: -3.6977, lat: 40.3917, heightOffsetM: 20, category: 'park' },
+  { id: 'cuatrocaminos', label: 'Cuatro Caminos / Chamberí', lon: -3.7037, lat: 40.4468, heightOffsetM: 26, category: 'neighborhood' },
 ];
 
 type CameraMode = 'map' | 'aerial' | 'bike';
@@ -58,7 +60,7 @@ async function initApp(): Promise<void> {
   const btnPois = document.getElementById('btn-pois') as HTMLButtonElement;
 
   // 1. Cargar manifiesto de chunks espaciales + DEM real
-  loadingStatus.textContent = 'Cargando índice espacial y topografía real de Madrid (9,35 km²)...';
+  loadingStatus.textContent = 'Cargando índice espacial y topografía real de Madrid (M-30)...';
   const manifestRes = await fetch('/data/chunks/manifest.json');
   if (!manifestRes.ok) {
     throw new Error(`No se pudo cargar /data/chunks/manifest.json (HTTP ${manifestRes.status})`);
@@ -121,7 +123,7 @@ async function initApp(): Promise<void> {
     48,
     window.innerWidth / window.innerHeight,
     0.5,
-    3600
+    5200
   );
   const startGroundY = terrain.getHeightAtXZ(0, 0);
   camera.position.set(-220, startGroundY + 220, 280);
@@ -131,7 +133,7 @@ async function initApp(): Promise<void> {
   mapControls.dampingFactor = 0.08;
   mapControls.maxPolarAngle = Math.PI * 0.47;
   mapControls.minDistance = 40;
-  mapControls.maxDistance = 2200;
+  mapControls.maxDistance = 3800;
   mapControls.target.set(0, startGroundY, 0);
   mapControls.update();
 

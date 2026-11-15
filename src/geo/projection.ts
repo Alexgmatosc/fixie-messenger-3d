@@ -2,7 +2,7 @@ import type { DemGrid } from '../types/mapData';
 
 export const ORIGIN_LON = -3.6941;
 export const ORIGIN_LAT = 40.4152;
-export const MAP_BBOX: [number, number, number, number] = [-3.7150, 40.4050, -3.6750, 40.4300];
+export const MAP_BBOX: [number, number, number, number] = [-3.7510, 40.3820, -3.6570, 40.4870];
 
 const METERS_PER_DEG_LON = 111320 * Math.cos((ORIGIN_LAT * Math.PI) / 180);
 const METERS_PER_DEG_LAT = 110540;
@@ -48,6 +48,10 @@ export class TerrainElevation {
 
   get maxElevationM(): number {
     return this.dem.maxElevationM;
+  }
+
+  get bbox(): [number, number, number, number] {
+    return this.dem.bbox;
   }
 
   getHeightAtLonLat(lon: number, lat: number): number {
