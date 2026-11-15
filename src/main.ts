@@ -136,7 +136,8 @@ async function initApp(): Promise<void> {
   mapControls.update();
 
   let cameraMode: CameraMode = 'map';
-  let poisVisible = true;
+  let poisVisible = false;
+  poiLayer.style.display = 'none';
 
   const freeState = {
     x: -11,

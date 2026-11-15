@@ -267,25 +267,55 @@ function buildPolygonSurfaceMesh(
   return mesh;
 }
 
-function getRoadStyle(road: RoadFeature): { width: number; roadClass: number; baseY: number } {
-  const hw = road.highway;
-  if (hw === 'trunk' || hw === 'primary' || hw === 'primary_link') {
-    const width = road.oneway ? (road.lanes >= 4 ? 13.0 : 11.0) : 20.0;
-    return { width, roadClass: 3, baseY: 0.28 };
-  }
-  if (hw === 'secondary' || hw === 'secondary_link' || hw === 'tertiary' || hw === 'tertiary_link') {
-    const width = road.oneway ? 8.5 : 10.0;
-    return { width, roadClass: 2, baseY: 0.22 };
-  }
-  if (hw === 'residential' || hw === 'living_street' || hw === 'unclassified' || hw === 'service') {
-    const width = hw === 'service' ? 4.4 : 6.0;
-    return { width, roadClass: 1, baseY: 0.16 };
-  }
-  const width = hw === 'pedestrian' ? 3.8 : 2.6;
-  return { width, roadClass: 0, baseY: 0.10 };
+interface RoadStyleInfo {
+  width: number;
+  roadClass: number;
+  laneCount: number;
+  baseY: number;
 }
 
-function subdividePolylineXZ(pts: [number, number][], maxSegLen = 12): [number, number][] {
+function getRoadStyle(road: RoadFeature, roadIdx = 0): RoadStyleInfo {
+  const hw = road.highway;
+  const stagger = (roadIdx % 19) * 0.0008;
+
+  if (hw === 'trunk' || hw === 'primary' || hw === 'primary_link') {
+    const width = road.oneway
+      ? road.lanes >= 4
+        ? 13.5
+        : road.lanes === 3
+          ? 11.2
+          : 9.0
+      : road.lanes >= 4
+        ? 17.5
+        : 14.0;
+    const laneCount = road.oneway
+      ? road.lanes >= 4
+        ? 3
+        : road.lanes === 3
+          ? 2
+          : 1
+      : road.lanes >= 4
+        ? 3
+        : 1;
+    return { width, roadClass: 3, laneCount, baseY: 0.25 + stagger };
+  }
+
+  if (hw === 'secondary' || hw === 'secondary_link' || hw === 'tertiary' || hw === 'tertiary_link') {
+    const width = road.oneway ? (road.lanes >= 3 ? 9.8 : 7.6) : 9.4;
+    const laneCount = road.oneway ? (road.lanes >= 3 ? 2 : 1) : 1;
+    return { width, roadClass: 2, laneCount, baseY: 0.21 + stagger };
+  }
+
+  if (hw === 'residential' || hw === 'living_street' || hw === 'unclassified' || hw === 'service') {
+    const width = hw === 'service' ? 4.2 : 6.0;
+    return { width, roadClass: 1, laneCount: 0, baseY: 0.17 + stagger };
+  }
+
+  const width = hw === 'pedestrian' ? 4.2 : 2.5;
+  return { width, roadClass: 0, laneCount: 0, baseY: 0.11 + stagger * 0.5 };
+}
+
+function subdividePolylineXZ(pts: [number, number][], maxSegLen = 10): [number, number][] {
   if (pts.length < 2) return pts;
   const out: [number, number][] = [pts[0]];
   for (let i = 1; i < pts.length; i++) {
@@ -304,13 +334,166 @@ function subdividePolylineXZ(pts: [number, number][], maxSegLen = 12): [number, 
   return out;
 }
 
+interface JunctionHub {
+  cx: number;
+  cz: number;
+  hubRadius: number;
+  maxHalfW: number;
+  maxRoadClass: number;
+}
+
+function refinePolylineNearJunctions(
+  pts: [number, number][],
+  junctions: JunctionHub[]
+): [number, number][] {
+  if (pts.length < 2 || junctions.length === 0) return pts;
+  const out: [number, number][] = [pts[0]];
+  for (let i = 1; i < pts.length; i++) {
+    const [x0, z0] = pts[i - 1];
+    const [x1, z1] = pts[i];
+    const segLen = Math.hypot(x1 - x0, z1 - z0);
+    if (segLen > 2.4) {
+      const mx = (x0 + x1) * 0.5;
+      const mz = (z0 + z1) * 0.5;
+      const reach = segLen * 0.5 + 18;
+      let near = false;
+      for (let j = 0; j < junctions.length; j++) {
+        const jc = junctions[j];
+        if (Math.hypot(mx - jc.cx, mz - jc.cz) < jc.hubRadius + reach) {
+          near = true;
+          break;
+        }
+      }
+      if (near) {
+        const steps = Math.ceil(segLen / 2.2);
+        for (let s = 1; s < steps; s++) {
+          const t = s / steps;
+          out.push([x0 + (x1 - x0) * t, z0 + (z1 - z0) * t]);
+        }
+      }
+    }
+    out.push([x1, z1]);
+  }
+  return out;
+}
+
+function segIntersectXZ(
+  ax: number, az: number, bx: number, bz: number,
+  cx: number, cz: number, dx: number, dz: number
+): [number, number] | null {
+  const rx = bx - ax;
+  const rz = bz - az;
+  const sx = dx - cx;
+  const sz = dz - cz;
+  const denom = rx * sz - rz * sx;
+  if (Math.abs(denom) < 1e-6) return null;
+  const qpx = cx - ax;
+  const qpz = cz - az;
+  const t = (qpx * sz - qpz * sx) / denom;
+  const u = (qpx * rz - qpz * rx) / denom;
+  if (t >= 0.02 && t <= 0.98 && u >= 0.02 && u <= 0.98) {
+    return [ax + t * rx, az + t * rz];
+  }
+  return null;
+}
+
+interface JunctionNodeCluster {
+  xSum: number;
+  zSum: number;
+  count: number;
+  angles: number[];
+  roadIds: Set<number>;
+  maxHalfW: number;
+  maxClass: number;
+  minClass: number;
+}
+
+function addLegAngle(angles: number[], dx: number, dz: number): void {
+  const len = Math.hypot(dx, dz);
+  if (len < 0.05) return;
+  const ang = Math.atan2(dz, dx);
+  for (let i = 0; i < angles.length; i++) {
+    let diff = Math.abs(ang - angles[i]);
+    if (diff > Math.PI) diff = Math.PI * 2 - diff;
+    if (diff < 0.38) return; // < ~22°, misma dirección
+  }
+  angles.push(ang);
+}
+
 interface RoadVertexSample {
   x: number;
-  y: number;
   z: number;
   nx: number;
-  ny: number;
   nz: number;
+}
+
+function pushJunctionDisc(
+  cx: number,
+  cz: number,
+  radius: number,
+  yOffset: number,
+  roadClass: number,
+  terrain: TerrainElevation,
+  positions: number[],
+  normals: number[],
+  uvs: number[],
+  roadClasses: number[],
+  laneCounts: number[],
+  markMasks: number[],
+  crosswalks: number[]
+): void {
+  const segs = 12;
+  const cy = terrain.getHeightAtXZ(cx, cz) + yOffset;
+  const cn = terrain.getNormalAtXZ(cx, cz);
+
+  for (let i = 0; i < segs; i++) {
+    const a0 = (i / segs) * Math.PI * 2;
+    const a1 = ((i + 1) / segs) * Math.PI * 2;
+    const x0 = cx + Math.cos(a0) * radius;
+    const z0 = cz + Math.sin(a0) * radius;
+    const x1 = cx + Math.cos(a1) * radius;
+    const z1 = cz + Math.sin(a1) * radius;
+
+    const y0 = terrain.getHeightAtXZ(x0, z0) + yOffset;
+    const y1 = terrain.getHeightAtXZ(x1, z1) + yOffset;
+    const n0 = terrain.getNormalAtXZ(x0, z0);
+    const n1 = terrain.getNormalAtXZ(x1, z1);
+
+    positions.push(cx, cy, cz, x1, y1, z1, x0, y0, z0);
+    normals.push(
+      cn[0], cn[1], cn[2],
+      n1[0], n1[1], n1[2],
+      n0[0], n0[1], n0[2]
+    );
+    uvs.push(0.5, 0, 0.5, 0, 0.5, 0);
+    for (let k = 0; k < 3; k++) {
+      roadClasses.push(roadClass);
+      laneCounts.push(0);
+      markMasks.push(0);
+      crosswalks.push(0);
+    }
+  }
+}
+
+function segDistSqXZ(
+  px: number, pz: number,
+  ax: number, az: number,
+  bx: number, bz: number
+): number {
+  const vx = bx - ax;
+  const vz = bz - az;
+  const lenSq = vx * vx + vz * vz;
+  if (lenSq < 1e-8) {
+    const dx = px - ax;
+    const dz = pz - az;
+    return dx * dx + dz * dz;
+  }
+  const t = Math.max(0, Math.min(1, ((px - ax) * vx + (pz - az) * vz) / lenSq));
+  const cx = ax + t * vx;
+  const cz = az + t * vz;
+  const dx = px - cx;
+  const dz = pz - cz;
+  return dx * dx + dz * dz;
 }
 
 function buildRoadsMesh(
@@ -322,20 +505,284 @@ function buildRoadsMesh(
   const normals: number[] = [];
   const uvs: number[] = [];
   const roadClasses: number[] = [];
+  const laneCounts: number[] = [];
+  const markMasks: number[] = [];
+  const crosswalks: number[] = [];
 
-  for (const road of roads) {
+  interface PreparedRoad {
+    roadIdx: number;
+    rawPts: [number, number][];
+    totalLen: number;
+    style: RoadStyleInfo;
+    isClosed: boolean;
+    isRoundabout: boolean;
+  }
+
+  const prepared: PreparedRoad[] = [];
+  for (let idx = 0; idx < roads.length; idx++) {
+    const road = roads[idx];
     const rawPts = road.coords.map(([lon, lat]) => projectToMeters(lon, lat));
-    const pts = subdividePolylineXZ(rawPts, 12);
+    if (rawPts.length < 2) continue;
+
+    let totalLen = 0;
+    let totalAbsTurn = 0;
+    for (let i = 1; i < rawPts.length; i++) {
+      totalLen += Math.hypot(rawPts[i][0] - rawPts[i - 1][0], rawPts[i][1] - rawPts[i - 1][1]);
+      if (i >= 2) {
+        const dx0 = rawPts[i - 1][0] - rawPts[i - 2][0];
+        const dz0 = rawPts[i - 1][1] - rawPts[i - 2][1];
+        const dx1 = rawPts[i][0] - rawPts[i - 1][0];
+        const dz1 = rawPts[i][1] - rawPts[i - 1][1];
+        const l0 = Math.hypot(dx0, dz0);
+        const l1 = Math.hypot(dx1, dz1);
+        if (l0 > 0.2 && l1 > 0.2) {
+          const dot = Math.max(-1, Math.min(1, (dx0 * dx1 + dz0 * dz1) / (l0 * l1)));
+          totalAbsTurn += Math.acos(dot);
+        }
+      }
+    }
+    const isClosed =
+      rawPts.length >= 4 &&
+      Math.hypot(rawPts[0][0] - rawPts[rawPts.length - 1][0], rawPts[0][1] - rawPts[rawPts.length - 1][1]) < 0.5;
+    const isRoundaboutArc = road.oneway && totalLen < 180 && totalAbsTurn > 0.55;
+    const isRoundabout = (isClosed && totalLen < 420) || isRoundaboutArc;
+
+    prepared.push({
+      roadIdx: idx,
+      rawPts,
+      totalLen,
+      style: getRoadStyle(road, idx),
+      isClosed,
+      isRoundabout,
+    });
+  }
+
+  // 1. Detectar intersecciones entre vías rodadas (nodos compartidos + cruces 2D)
+  const clusterMap = new Map<string, JunctionNodeCluster>();
+  const CELL_CLUSTER = 1.6;
+
+  interface DriveSeg {
+    roadIdx: number;
+    halfW: number;
+    roadClass: number;
+    ax: number;
+    az: number;
+    bx: number;
+    bz: number;
+    dirX: number;
+    dirZ: number;
+    minX: number;
+    maxX: number;
+    minZ: number;
+    maxZ: number;
+  }
+  const driveSegs: DriveSeg[] = [];
+
+  for (const pr of prepared) {
+    if (pr.style.roadClass < 1) continue;
+    const halfW = pr.style.width * 0.5;
+    const pts = pr.rawPts;
+
+    for (let i = 0; i < pts.length; i++) {
+      const [x, z] = pts[i];
+      const kx = Math.round(x / CELL_CLUSTER);
+      const kz = Math.round(z / CELL_CLUSTER);
+      const key = `${kx}_${kz}`;
+      let cluster = clusterMap.get(key);
+      if (!cluster) {
+        cluster = {
+          xSum: 0,
+          zSum: 0,
+          count: 0,
+          angles: [],
+          roadIds: new Set<number>(),
+          maxHalfW: halfW,
+          maxClass: pr.style.roadClass,
+          minClass: pr.style.roadClass,
+        };
+        clusterMap.set(key, cluster);
+      }
+      cluster.xSum += x;
+      cluster.zSum += z;
+      cluster.count++;
+      cluster.roadIds.add(pr.roadIdx);
+      if (halfW > cluster.maxHalfW) cluster.maxHalfW = halfW;
+      if (pr.style.roadClass > cluster.maxClass) cluster.maxClass = pr.style.roadClass;
+      if (pr.style.roadClass < cluster.minClass) cluster.minClass = pr.style.roadClass;
+
+      if (i > 0) {
+        addLegAngle(cluster.angles, pts[i - 1][0] - x, pts[i - 1][1] - z);
+      }
+      if (i < pts.length - 1) {
+        addLegAngle(cluster.angles, pts[i + 1][0] - x, pts[i + 1][1] - z);
+      }
+    }
+
+    for (let i = 0; i < pts.length - 1; i++) {
+      const ax = pts[i][0];
+      const az = pts[i][1];
+      const bx = pts[i + 1][0];
+      const bz = pts[i + 1][1];
+      const len = Math.hypot(bx - ax, bz - az) || 1;
+      driveSegs.push({
+        roadIdx: pr.roadIdx,
+        halfW,
+        roadClass: pr.style.roadClass,
+        ax,
+        az,
+        bx,
+        bz,
+        dirX: (bx - ax) / len,
+        dirZ: (bz - az) / len,
+        minX: Math.min(ax, bx),
+        maxX: Math.max(ax, bx),
+        minZ: Math.min(az, bz),
+        maxZ: Math.max(az, bz),
+      });
+    }
+  }
+
+  const rawJunctions: JunctionHub[] = [];
+  for (const cl of clusterMap.values()) {
+    const legCount = cl.angles.length;
+    const isMultiRoadSplit =
+      cl.roadIds.size >= 2 && (legCount >= 3 || cl.maxClass > cl.minClass);
+    if (legCount >= 3 || isMultiRoadSplit) {
+      const hubRadius = Math.min(15.0, Math.max(4.8, cl.maxHalfW * 1.25 + 1.8));
+      rawJunctions.push({
+        cx: cl.xSum / cl.count,
+        cz: cl.zSum / cl.count,
+        hubRadius,
+        maxHalfW: cl.maxHalfW,
+        maxRoadClass: cl.maxClass,
+      });
+    }
+  }
+
+  // Cruces 2D entre segmentos sin nodo compartido (ej. calzadas dobles cruzándose)
+  const CROSS_CELL = 24;
+  const segGrid = new Map<string, number[]>();
+  for (let i = 0; i < driveSegs.length; i++) {
+    const s = driveSegs[i];
+    const cMinX = Math.floor(s.minX / CROSS_CELL);
+    const cMaxX = Math.floor(s.maxX / CROSS_CELL);
+    const cMinZ = Math.floor(s.minZ / CROSS_CELL);
+    const cMaxZ = Math.floor(s.maxZ / CROSS_CELL);
+    for (let gx = cMinX; gx <= cMaxX; gx++) {
+      for (let gz = cMinZ; gz <= cMaxZ; gz++) {
+        const k = `${gx}_${gz}`;
+        let arr = segGrid.get(k);
+        if (!arr) {
+          arr = [];
+          segGrid.set(k, arr);
+        }
+        arr.push(i);
+      }
+    }
+  }
+
+  const testedPairs = new Set<number>();
+  const nSegs = driveSegs.length;
+  for (const bucket of segGrid.values()) {
+    for (let i = 0; i < bucket.length; i++) {
+      const ia = bucket[i];
+      const a = driveSegs[ia];
+      for (let j = i + 1; j < bucket.length; j++) {
+        const ib = bucket[j];
+        const b = driveSegs[ib];
+        if (a.roadIdx === b.roadIdx) continue;
+        if (
+          a.maxX < b.minX ||
+          a.minX > b.maxX ||
+          a.maxZ < b.minZ ||
+          a.minZ > b.maxZ
+        ) {
+          continue;
+        }
+        const pairKey = ia < ib ? ia * nSegs + ib : ib * nSegs + ia;
+        if (testedPairs.has(pairKey)) continue;
+        testedPairs.add(pairKey);
+
+        const hit = segIntersectXZ(a.ax, a.az, a.bx, a.bz, b.ax, b.az, b.bx, b.bz);
+        if (hit) {
+          const maxHalfW = Math.max(a.halfW, b.halfW);
+          rawJunctions.push({
+            cx: hit[0],
+            cz: hit[1],
+            hubRadius: Math.min(15.0, Math.max(4.8, maxHalfW * 1.25 + 1.8)),
+            maxHalfW,
+            maxRoadClass: Math.max(a.roadClass, b.roadClass),
+          });
+        }
+      }
+    }
+  }
+
+  // Fusionar hubs casi idénticos (< 3.2 m) conservando el radio mayor
+  const junctions: JunctionHub[] = [];
+  for (const rj of rawJunctions) {
+    let merged = false;
+    for (const existing of junctions) {
+      if (Math.hypot(rj.cx - existing.cx, rj.cz - existing.cz) < 3.2) {
+        existing.cx = (existing.cx + rj.cx) * 0.5;
+        existing.cz = (existing.cz + rj.cz) * 0.5;
+        existing.hubRadius = Math.max(existing.hubRadius, rj.hubRadius);
+        existing.maxHalfW = Math.max(existing.maxHalfW, rj.maxHalfW);
+        existing.maxRoadClass = Math.max(existing.maxRoadClass, rj.maxRoadClass);
+        merged = true;
+        break;
+      }
+    }
+    if (!merged) junctions.push(rj);
+  }
+
+  // 2. Tapas circulares de bordillo e intersección en cada cruce
+  for (const junc of junctions) {
+    pushJunctionDisc(
+      junc.cx,
+      junc.cz,
+      junc.maxHalfW + 0.55,
+      0.135,
+      -1,
+      terrain,
+      positions,
+      normals,
+      uvs,
+      roadClasses,
+      laneCounts,
+      markMasks,
+      crosswalks
+    );
+    const capY = junc.maxRoadClass === 3 ? 0.246 : junc.maxRoadClass === 2 ? 0.206 : 0.166;
+    pushJunctionDisc(
+      junc.cx,
+      junc.cz,
+      junc.maxHalfW * 0.98,
+      capY,
+      junc.maxRoadClass,
+      terrain,
+      positions,
+      normals,
+      uvs,
+      roadClasses,
+      laneCounts,
+      markMasks,
+      crosswalks
+    );
+  }
+
+  // 3. Emitir cintas viales (bordillo inferior para rodadas + calzada superior con marcas filtradas)
+  for (const pr of prepared) {
+    const { roadClass, width, laneCount, baseY } = pr.style;
+    const isDriveable = roadClass >= 1;
+    let pts = subdividePolylineXZ(pr.rawPts, 10);
+    if (isDriveable && junctions.length > 0) {
+      pts = refinePolylineNearJunctions(pts, junctions);
+    }
     if (pts.length < 2) continue;
 
-    const { width, roadClass, baseY } = getRoadStyle(road);
     const halfW = width * 0.5;
-    const isClosed =
-      pts.length >= 4 &&
-      Math.hypot(pts[0][0] - pts[pts.length - 1][0], pts[0][1] - pts[pts.length - 1][1]) < 0.3;
-
-    const leftPts: RoadVertexSample[] = [];
-    const rightPts: RoadVertexSample[] = [];
+    const centerSamples: RoadVertexSample[] = [];
     const cumDist: number[] = [0];
 
     for (let i = 1; i < pts.length; i++) {
@@ -347,7 +794,7 @@ function buildRoadsMesh(
     for (let i = 0; i < pts.length; i++) {
       let prevIdx = i - 1;
       let nextIdx = i + 1;
-      if (isClosed) {
+      if (pr.isClosed) {
         if (i === 0) prevIdx = pts.length - 2;
         if (i === pts.length - 1) nextIdx = 1;
       }
@@ -391,74 +838,163 @@ function buildRoadsMesh(
         const n1x = -dz1 / len1;
         const n1z = dx1 / len1;
         const dot = nx * n1x + nz * n1z;
-        const miter = dot > 0.55 ? Math.min(1.6, 1 / dot) : 1.0;
+        const miter = dot > 0.55 ? Math.min(1.55, 1 / dot) : 1.0;
         nx *= miter;
         nz *= miter;
       }
 
-      const lx = pts[i][0] - nx * halfW;
-      const lz = pts[i][1] - nz * halfW;
-      const ln = terrain.getNormalAtXZ(lx, lz);
-      leftPts.push({
-        x: lx,
-        y: terrain.getHeightAtXZ(lx, lz) + baseY,
-        z: lz,
-        nx: ln[0],
-        ny: ln[1],
-        nz: ln[2],
-      });
-
-      const rx = pts[i][0] + nx * halfW;
-      const rz = pts[i][1] + nz * halfW;
-      const rn = terrain.getNormalAtXZ(rx, rz);
-      rightPts.push({
-        x: rx,
-        y: terrain.getHeightAtXZ(rx, rz) + baseY,
-        z: rz,
-        nx: rn[0],
-        ny: rn[1],
-        nz: rn[2],
-      });
+      centerSamples.push({ x: pts[i][0], z: pts[i][1], nx, nz });
     }
 
-    for (let i = 0; i < pts.length - 1; i++) {
-      const l0 = leftPts[i];
-      const r0 = rightPts[i];
-      const l1 = leftPts[i + 1];
-      const r1 = rightPts[i + 1];
-      const v0 = cumDist[i];
-      const v1 = cumDist[i + 1];
+    const emitStrip = (
+      stripHalfW: number,
+      stripBaseY: number,
+      stripClass: number,
+      stripLanes: number,
+      allowMarkings: boolean
+    ): void => {
+      const leftPts: { x: number; y: number; z: number; nx: number; ny: number; nz: number }[] = [];
+      const rightPts: { x: number; y: number; z: number; nx: number; ny: number; nz: number }[] = [];
 
-      positions.push(
-        l0.x, l0.y, l0.z,
-        r0.x, r0.y, r0.z,
-        l1.x, l1.y, l1.z,
-        r0.x, r0.y, r0.z,
-        r1.x, r1.y, r1.z,
-        l1.x, l1.y, l1.z
-      );
-      normals.push(
-        l0.nx, l0.ny, l0.nz,
-        r0.nx, r0.ny, r0.nz,
-        l1.nx, l1.ny, l1.nz,
-        r0.nx, r0.ny, r0.nz,
-        r1.nx, r1.ny, r1.nz,
-        l1.nx, l1.ny, l1.nz
-      );
+      for (let i = 0; i < centerSamples.length; i++) {
+        const s = centerSamples[i];
+        const lx = s.x - s.nx * stripHalfW;
+        const lz = s.z - s.nz * stripHalfW;
+        const ln = terrain.getNormalAtXZ(lx, lz);
+        leftPts.push({
+          x: lx,
+          y: terrain.getHeightAtXZ(lx, lz) + stripBaseY,
+          z: lz,
+          nx: ln[0],
+          ny: ln[1],
+          nz: ln[2],
+        });
 
-      for (let k = 0; k < 6; k++) {
-        roadClasses.push(roadClass);
+        const rx = s.x + s.nx * stripHalfW;
+        const rz = s.z + s.nz * stripHalfW;
+        const rn = terrain.getNormalAtXZ(rx, rz);
+        rightPts.push({
+          x: rx,
+          y: terrain.getHeightAtXZ(rx, rz) + stripBaseY,
+          z: rz,
+          nx: rn[0],
+          ny: rn[1],
+          nz: rn[2],
+        });
       }
 
-      uvs.push(
-        0, v0,
-        1, v0,
-        0, v1,
-        1, v0,
-        1, v1,
-        0, v1
-      );
+      for (let i = 0; i < centerSamples.length - 1; i++) {
+        const l0 = leftPts[i];
+        const r0 = rightPts[i];
+        const l1 = leftPts[i + 1];
+        const r1 = rightPts[i + 1];
+        const v0 = cumDist[i];
+        const v1 = cumDist[i + 1];
+
+        let segMarkMask = 0;
+        let segCrosswalk = 0;
+
+        if (allowMarkings) {
+          const sdx = centerSamples[i + 1].x - centerSamples[i].x;
+          const sdz = centerSamples[i + 1].z - centerSamples[i].z;
+          const sLen = Math.hypot(sdx, sdz) || 1;
+          const segDirX = sdx / sLen;
+          const segDirZ = sdz / sLen;
+          const mx = (centerSamples[i].x + centerSamples[i + 1].x) * 0.5;
+          const mz = (centerSamples[i].z + centerSamples[i + 1].z) * 0.5;
+
+          let insideAnyHub = false;
+          let inCrosswalkZone = false;
+
+          for (let j = 0; j < junctions.length; j++) {
+            const junc = junctions[j];
+            const d = Math.hypot(mx - junc.cx, mz - junc.cz);
+            if (d <= junc.hubRadius) {
+              insideAnyHub = true;
+              break;
+            }
+            if (
+              !pr.isRoundabout &&
+              pr.totalLen >= 28 &&
+              stripClass >= 2 &&
+              junc.maxRoadClass >= 2 &&
+              d > junc.hubRadius + 0.5 &&
+              d <= junc.hubRadius + 2.85
+            ) {
+              inCrosswalkZone = true;
+            }
+          }
+
+          if (!insideAnyHub) {
+            const cgx = Math.floor(mx / CROSS_CELL);
+            const cgz = Math.floor(mz / CROSS_CELL);
+            outerGrid: for (let ox = cgx - 1; ox <= cgx + 1; ox++) {
+              for (let oz = cgz - 1; oz <= cgz + 1; oz++) {
+                const bucket = segGrid.get(`${ox}_${oz}`);
+                if (!bucket) continue;
+                for (let k = 0; k < bucket.length; k++) {
+                  const b = driveSegs[bucket[k]];
+                  if (b.roadIdx === pr.roadIdx) continue;
+                  const headingDot = Math.abs(segDirX * b.dirX + segDirZ * b.dirZ);
+                  const clearR = headingDot < 0.88 ? b.halfW + 2.5 : b.roadClass > stripClass ? b.halfW + 1.0 : 0;
+                  if (clearR > 0 && segDistSqXZ(mx, mz, b.ax, b.az, b.bx, b.bz) <= clearR * clearR) {
+                    insideAnyHub = true;
+                    break outerGrid;
+                  }
+                }
+              }
+            }
+          }
+
+          if (!insideAnyHub) {
+            if (inCrosswalkZone) {
+              segCrosswalk = 1;
+            } else {
+              segMarkMask = 1;
+            }
+          }
+        }
+
+        positions.push(
+          l0.x, l0.y, l0.z,
+          r0.x, r0.y, r0.z,
+          l1.x, l1.y, l1.z,
+          r0.x, r0.y, r0.z,
+          r1.x, r1.y, r1.z,
+          l1.x, l1.y, l1.z
+        );
+        normals.push(
+          l0.nx, l0.ny, l0.nz,
+          r0.nx, r0.ny, r0.nz,
+          l1.nx, l1.ny, l1.nz,
+          r0.nx, r0.ny, r0.nz,
+          r1.nx, r1.ny, r1.nz,
+          l1.nx, l1.ny, l1.nz
+        );
+
+        for (let k = 0; k < 6; k++) {
+          roadClasses.push(stripClass);
+          laneCounts.push(stripLanes);
+          markMasks.push(segMarkMask);
+          crosswalks.push(segCrosswalk);
+        }
+
+        uvs.push(
+          0, v0,
+          1, v0,
+          0, v1,
+          1, v0,
+          1, v1,
+          0, v1
+        );
+      }
+    };
+
+    if (isDriveable) {
+      // Bordillo inferior (y = 0.135) cubierto limpiamente por el asfalto de cualquier calle que cruce
+      emitStrip(halfW + 0.55, 0.135, -1, 0, false);
     }
+    emitStrip(halfW, baseY, roadClass, laneCount, isDriveable && roadClass >= 2);
   }
 
   if (positions.length === 0) return null;
@@ -468,6 +1004,9 @@ function buildRoadsMesh(
   geom.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
   geom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   geom.setAttribute('aRoadClass', new THREE.Float32BufferAttribute(roadClasses, 1));
+  geom.setAttribute('aLaneCount', new THREE.Float32BufferAttribute(laneCounts, 1));
+  geom.setAttribute('aMarkMask', new THREE.Float32BufferAttribute(markMasks, 1));
+  geom.setAttribute('aCrosswalk', new THREE.Float32BufferAttribute(crosswalks, 1));
 
   const mesh = new THREE.Mesh(geom, material);
   mesh.name = 'chunk-roads';
