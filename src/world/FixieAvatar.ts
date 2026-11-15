@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 
-export type RiderPresetId = 'ryuji' | 'dante' | 'kuro' | 'niko';
+export type RiderPresetId = 'ryuji' | 'dante' | 'maya' | 'kuro' | 'niko';
 
 export interface RiderPresetInfo {
   id: RiderPresetId;
@@ -11,6 +11,7 @@ export interface RiderPresetInfo {
 export const RIDER_PRESETS: RiderPresetInfo[] = [
   { id: 'ryuji', label: 'Ryuji', tagline: 'Tokyo Liner · Carhartt' },
   { id: 'dante', label: 'Dante', tagline: 'Locs · Chrome Sling' },
+  { id: 'maya', label: 'Maya', tagline: 'Alleycat · Vans & Tattoos' },
   { id: 'kuro', label: 'Kuro', tagline: 'Stealth · Calcetín Blanco' },
   { id: 'niko', label: 'Niko', tagline: 'Braids · Workwear Azul' },
 ];
@@ -32,13 +33,14 @@ export interface FixieVisualState {
 interface RiderLookSpec {
   skin: number;
   hair: number;
-  hairStyle: 'bleached_spiky' | 'dreads' | 'buzz' | 'cornrows';
+  hairStyle: 'bleached_spiky' | 'dreads' | 'shoulder_waves' | 'buzz' | 'cornrows';
   sunglasses: boolean;
   jacket: number;
   innerShirt: number;
   shortSleeves: boolean;
   looseFlap: boolean;
   pants: number;
+  bareLegs: boolean;
   beltBuckle: boolean;
   hipKeychain: boolean;
   carharttPatch: boolean;
@@ -59,16 +61,17 @@ const PRESET_SPECS: Record<RiderPresetId, RiderLookSpec> = {
     hair: 0xebd7a7,
     hairStyle: 'bleached_spiky',
     sunglasses: false,
-    jacket: 0x3b4440,      // chaqueta acolchada verde oliva oscuro/carbón
+    jacket: 0x3b4440,
     innerShirt: 0x202c44,
     shortSleeves: false,
     looseFlap: true,
-    pants: 0x625d62,       // Carhartt gris lavado
+    pants: 0x625d62,
+    bareLegs: false,
     beltBuckle: true,
     hipKeychain: true,
     carharttPatch: true,
-    socks: 0x1d2b4e,       // calcetín azul marino alto
-    shoeUpper: 0xa2a6ad,   // NB gris
+    socks: 0x1d2b4e,
+    shoeUpper: 0xa2a6ad,
     shoeSole: 0xedeef2,
     gloveColor: 0x1b1d22,
     gloveWhiteBack: false,
@@ -82,11 +85,12 @@ const PRESET_SPECS: Record<RiderPresetId, RiderLookSpec> = {
     hair: 0x1c1715,
     hairStyle: 'dreads',
     sunglasses: false,
-    jacket: 0xededf0,      // camiseta blanca oversized boxy
+    jacket: 0xededf0,
     innerShirt: 0xededf0,
     shortSleeves: true,
     looseFlap: true,
     pants: 0x1e2026,
+    bareLegs: false,
     beltBuckle: false,
     hipKeychain: false,
     carharttPatch: false,
@@ -95,25 +99,50 @@ const PRESET_SPECS: Record<RiderPresetId, RiderLookSpec> = {
     shoeSole: 0xeceef2,
     gloveColor: 0x1c1e24,
     gloveWhiteBack: false,
-    chromeSling: true,     // bandolera Chrome granate cruzada
+    chromeSling: true,
     slingColor: 0x5d2233,
     wristSilver: true,
     forearmTattoo: false,
+  },
+  maya: {
+    skin: 0xe8bc9e,
+    hair: 0xb8764c,
+    hairStyle: 'shoulder_waves',
+    sunglasses: true,
+    jacket: 0xf1f3f6,      // camiseta blanca corta
+    innerShirt: 0xf1f3f6,
+    shortSleeves: true,
+    looseFlap: false,
+    pants: 0x17191f,       // shorts negros
+    bareLegs: true,
+    beltBuckle: false,
+    hipKeychain: true,
+    carharttPatch: false,
+    socks: 0xf2f3f6,       // calcetín blanco alto
+    shoeUpper: 0x17191e,   // Vans negras con suela blanca
+    shoeSole: 0xf0f2f5,
+    gloveColor: 0xe8bc9e,  // manos sin guantes
+    gloveWhiteBack: false,
+    chromeSling: false,
+    slingColor: 0x17191f,
+    wristSilver: false,
+    forearmTattoo: true,
   },
   kuro: {
     skin: 0xdfb498,
     hair: 0x1a1c20,
     hairStyle: 'buzz',
     sunglasses: true,
-    jacket: 0x1a1d22,      // bomber/workwear negra
+    jacket: 0x1a1d22,
     innerShirt: 0x14161a,
     shortSleeves: false,
     looseFlap: true,
     pants: 0x16181e,
+    bareLegs: false,
     beltBuckle: true,
     hipKeychain: true,
     carharttPatch: false,
-    socks: 0xf2f3f6,       // calcetín blanco alto
+    socks: 0xf2f3f6,
     shoeUpper: 0x17191e,
     shoeSole: 0x262930,
     gloveColor: 0x17191e,
@@ -128,11 +157,12 @@ const PRESET_SPECS: Record<RiderPresetId, RiderLookSpec> = {
     hair: 0x191718,
     hairStyle: 'cornrows',
     sunglasses: false,
-    jacket: 0x183d73,      // sobrecamisa azul cobalto oscuro
+    jacket: 0x183d73,
     innerShirt: 0x17191f,
     shortSleeves: false,
     looseFlap: true,
     pants: 0x1c1e24,
+    bareLegs: false,
     beltBuckle: false,
     hipKeychain: false,
     carharttPatch: false,
@@ -140,7 +170,7 @@ const PRESET_SPECS: Record<RiderPresetId, RiderLookSpec> = {
     shoeUpper: 0x17191e,
     shoeSole: 0x2a2d35,
     gloveColor: 0x181a20,
-    gloveWhiteBack: true,  // guantes alleycat negros con gráfico blanco
+    gloveWhiteBack: true,
     chromeSling: false,
     slingColor: 0x183d73,
     wristSilver: false,
@@ -333,9 +363,12 @@ export class FixieAvatar {
   private readonly hairStyleGroups: Record<RiderLookSpec['hairStyle'], THREE.Group> = {
     bleached_spiky: new THREE.Group(),
     dreads: new THREE.Group(),
+    shoulder_waves: new THREE.Group(),
     buzz: new THREE.Group(),
     cornrows: new THREE.Group(),
   };
+  private readonly longPantLegMeshes: THREE.Object3D[] = [];
+  private readonly bareLegMeshes: THREE.Object3D[] = [];
   private readonly sunglassesGroup = new THREE.Group();
   private readonly chromeSlingGroup = new THREE.Group();
   private readonly carharttPatchMesh: THREE.Mesh;
@@ -574,6 +607,9 @@ export class FixieAvatar {
     this.rightGloveGraphicMesh.visible = spec.gloveWhiteBack;
     this.wristWatchMesh.visible = spec.wristSilver;
     this.tattooPatchMesh.visible = spec.forearmTattoo;
+
+    for (const m of this.longPantLegMeshes) m.visible = !spec.bareLegs;
+    for (const m of this.bareLegMeshes) m.visible = spec.bareLegs;
   }
 
   private buildDetailedHead(): void {
@@ -645,6 +681,20 @@ export class FixieAvatar {
     gDreads.add(this.hairFlowGroup);
     this.headGroup.add(gDreads);
 
+    // --- Peinado 5: Melena rubio cobrizo suelta hasta los hombros (Maya) ---
+    const gWaves = this.hairStyleGroups.shoulder_waves;
+    const waveCrown = new THREE.Mesh(new THREE.SphereGeometry(0.109, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.58), this.matHair);
+    waveCrown.position.set(0, 0.016, 0.014);
+    gWaves.add(waveCrown);
+    for (const sx of [-0.088, -0.052, 0.0, 0.052, 0.088]) {
+      const strand = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.022, 0.22, 6), this.matHair);
+      strand.position.set(sx, -0.065, 0.058 + (sx === 0 ? 0.02 : 0));
+      strand.rotation.set(0.28, 0, sx * 0.9);
+      strand.castShadow = true;
+      gWaves.add(strand);
+    }
+    this.headGroup.add(gWaves);
+
     // --- Peinado 3: Fade / buzz oscuro corto (Kuro - Foto 2 izq) ---
     const gBuzz = this.hairStyleGroups.buzz;
     const buzzCap = new THREE.Mesh(new THREE.SphereGeometry(0.106, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.54), this.matHair);
@@ -670,11 +720,23 @@ export class FixieAvatar {
     thighGroup.position.set(xSide, 1.05, 0.14);
     this.riderGroup.add(thighGroup);
 
-    // Muslo ancho workwear / Carhartt
-    const thighMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.086, 0.082, 0.40, 8), this.matPants);
-    thighMesh.position.set(0, -0.20, 0);
-    thighMesh.castShadow = true;
-    thighGroup.add(thighMesh);
+    // Muslo ancho workwear (o short + muslo desnudo tatuado para Maya)
+    const thighLong = new THREE.Mesh(new THREE.CylinderGeometry(0.086, 0.082, 0.40, 8), this.matPants);
+    thighLong.position.set(0, -0.20, 0);
+    thighLong.castShadow = true;
+
+    const thighShortTop = new THREE.Mesh(new THREE.CylinderGeometry(0.082, 0.078, 0.21, 8), this.matPants);
+    thighShortTop.position.set(0, -0.105, 0);
+    thighShortTop.castShadow = true;
+    const thighBareLower = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.052, 0.20, 8), this.matSkin);
+    thighBareLower.position.set(0, -0.30, 0);
+    thighBareLower.castShadow = true;
+    const thighTattoo = new THREE.Mesh(new THREE.CylinderGeometry(0.064, 0.060, 0.075, 8), this.matDarkTrim);
+    thighTattoo.position.set(0, -0.26, 0);
+
+    this.longPantLegMeshes.push(thighLong);
+    this.bareLegMeshes.push(thighShortTop, thighBareLower, thighTattoo);
+    thighGroup.add(thighLong, thighShortTop, thighBareLower, thighTattoo);
 
     shinGroup.position.set(0, -0.40, 0);
     thighGroup.add(shinGroup);
@@ -686,6 +748,14 @@ export class FixieAvatar {
 
     const cuffLip = new THREE.Mesh(new THREE.CylinderGeometry(0.092, 0.088, 0.036, 8), this.matPants);
     cuffLip.position.set(0, -0.205, 0);
+
+    // Gemelo desnudo si lleva shorts
+    const bareShin = new THREE.Mesh(new THREE.CylinderGeometry(0.051, 0.044, 0.21, 8), this.matSkin);
+    bareShin.position.set(0, -0.105, 0);
+    bareShin.castShadow = true;
+
+    this.longPantLegMeshes.push(upperPant, cuffLip);
+    this.bareLegMeshes.push(bareShin);
 
     const sockMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.044, 0.038, 0.18, 8), this.matSocks);
     sockMesh.position.set(0, -0.295, 0);
@@ -701,7 +771,7 @@ export class FixieAvatar {
     strapBand.position.set(0, 0.005, -0.055);
     footGroup.add(shoeUpper, shoeSole, strapBand);
 
-    shinGroup.add(upperPant, cuffLip, sockMesh, footGroup);
+    shinGroup.add(upperPant, cuffLip, bareShin, sockMesh, footGroup);
   }
 
   private buildCinelliMashBike(): void {
@@ -867,8 +937,11 @@ export class FixieAvatar {
     this.hopGroup.position.y = state.hopLiftM * 0.55;
     this.hopGroup.rotation.x = -state.hopLiftM * 0.65;
 
-    // Balanceo lateral rítmico del cuadro al pedalear de pie (sprint "dancer")
-    const rockAmp = state.standBlend * Math.min(1, Math.abs(state.speedMs) / 5.0 + 0.25) * (state.isSkidding ? 0.02 : 0.11);
+    const speedKmh = Math.abs(state.speedMs) * 3.6;
+    // El cuadro solo empieza a tambalear con fuerza cuando esprintamos verdaderamente rápido (>32 km/h)
+    const rockRamp = Math.max(0, Math.min(1, (speedKmh - 32) / 22));
+    const smoothRockRamp = rockRamp * rockRamp * (3 - 2 * rockRamp);
+    const rockAmp = state.isSkidding ? 0.012 : state.isSprinting ? 0.135 * smoothRockRamp : 0;
     const frameRock = Math.sin(state.crankAngle) * rockAmp;
     this.leanGroup.rotation.z = state.leanAngle + frameRock;
 
@@ -884,7 +957,6 @@ export class FixieAvatar {
     this.crankGroup.rotation.x = -state.crankAngle;
 
     // Postura real fixie: sprint de pie / track stand / aero tuck / skid "balls to stem"
-    const speedKmh = Math.abs(state.speedMs) * 3.6;
     const aeroTuck = !state.isSkidding ? Math.min(1, Math.max(0, (speedKmh - 30) / 26)) : 0;
 
     const targetHipF = state.isSkidding
