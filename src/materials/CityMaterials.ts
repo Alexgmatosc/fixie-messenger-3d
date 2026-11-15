@@ -1,9 +1,10 @@
 import * as THREE from 'three/webgpu';
 import {
   attribute,
+  bumpMap,
   color,
   float,
-  fract,
+  int,
   max,
   mix,
   normalWorld,
@@ -12,53 +13,66 @@ import {
   sin,
   smoothstep,
   step,
+  texture,
   uv,
+  vec2,
   vertexColor,
 } from 'three/tsl';
+import type { PnoaOrthoClipmap } from '../world/PnoaOrthoClipmap';
+import type { MadridFacadeArrays, MadridRoadTextures } from './MadridTextureAtlas';
 
 export const PALETTE = {
-  sky: 0xa9cef2,
-  fog: 0xdbe9f6,
-  ground: 0xefece5,
-  curbEdge: 0xd3cec4,
-  pedestrianPath: 0xebe6dc,
-  asphalt: 0x5d6470,
-  asphaltSecondary: 0x717884,
+  sky: 0x80b6ea,
+  fog: 0xd6e7f7,
+  ground: 0xe6e1d7,
+  curbEdge: 0xc9c3b8,
+  pedestrianPath: 0xe9e4da,
+  asphalt: 0x464a52,
+  asphaltSecondary: 0x575c65,
   roadMarking: 0xf4f6f8,
   buildingTones: [
-    0xf3f0e9, // alabastro luminoso (Cibeles / Banco de España)
-    0xebe3d4, // crema piedra suave
-    0xe4d7c3, // arena cálida pastel
-    0xdfe4eb, // gris azulado pálido
-    0xeee8dd, // marfil luminoso
-    0xe9d8c9, // melocotón piedra sutil
+    0xf5f0e6, // piedra caliza blanca cálida (Metrópolis / Cibeles / Banco de España)
+    0xeee5d5, // crema ensanche luminoso
+    0xe8dac3, // arena piedra de Salamanca / Chamberí
+    0xf1ebdf, // marfil claro Gran Vía
+    0xe4e6ea, // gris piedra claro
+    0xede0cf, // ocre suave madrileño
   ] as const,
-  roofFlat: 0xe6e2da,
-  roofSloped: 0x9aa4b2,
-  parkGrass: 0x9fe084,
-  treeCrowns: [0x82c768, 0x92d377, 0xa2de87, 0x76b85e] as const,
-  treeTrunk: 0x8a7562,
-  water: 0x4ca0eb,
+  roofFlat: 0xdfd8cd,
+  roofSloped: 0x8f9aa8,
+  parkGrass: 0x6ea655,
+  treeCrowns: [0x5d8d46, 0x6ea055, 0x7bad61, 0x4e7a3b] as const,
+  treeTrunk: 0x746150,
+  water: 0x4298e3,
 };
 
-export function createGroundMaterial(): THREE.MeshStandardNodeMaterial {
+export function createGroundMaterial(ortho?: PnoaOrthoClipmap): THREE.MeshStandardNodeMaterial {
   const mat = new THREE.MeshStandardNodeMaterial({
     roughness: 0.94,
     metalness: 0.02,
   });
 
   const elevFactor = smoothstep(float(-45.0), float(48.0), positionWorld.y);
-  const valleyTone = color(0xe4e0d8);
-  const ridgeTone = color(0xf4f2ec);
+  const valleyTone = color(0xded9cf);
+  const ridgeTone = color(0xefece5);
   const baseHypso = mix(valleyTone, ridgeTone, elevFactor);
   const heightTone = mix(color(PALETTE.ground), baseHypso, float(0.65));
   const slopeShade = mix(float(0.92), float(1.0), smoothstep(float(0.86), float(0.995), normalWorld.y));
 
-  mat.colorNode = heightTone.mul(slopeShade);
+  const baseColor = heightTone.mul(slopeShade);
+  if (ortho) {
+    const { orthoColor, orthoMask } = ortho.sampleWorldOrtho();
+    // Variación suave PNOA para no crear borrones grises en isletas/medianas a ras de rueda
+    const liftedOrtho = mix(orthoColor.rgb, color(0xeae5dc), float(0.45));
+    mat.colorNode = mix(baseColor, liftedOrtho, orthoMask.mul(0.32));
+  } else {
+    mat.colorNode = baseColor;
+  }
+
   return mat;
 }
 
-export function createParkMaterial(): THREE.MeshStandardNodeMaterial {
+export function createParkMaterial(ortho?: PnoaOrthoClipmap): THREE.MeshStandardNodeMaterial {
   const mat = new THREE.MeshStandardNodeMaterial({
     roughness: 0.92,
     metalness: 0.02,
@@ -71,7 +85,17 @@ export function createParkMaterial(): THREE.MeshStandardNodeMaterial {
     .mul(sin(positionWorld.z.mul(0.039)))
     .mul(0.5)
     .add(0.5);
-  mat.colorNode = mix(color(0x91d675), color(0xb0e796), wave);
+  const procGrass = mix(color(0x91d675), color(0xb0e796), wave);
+
+  if (ortho) {
+    const { orthoColor, orthoMask } = ortho.sampleWorldOrtho();
+    // Ortofoto real de parques (caminos de albero, parterres del Retiro) con leve refuerzo verde vivo
+    const vibrantParkOrtho = mix(orthoColor.rgb, procGrass, float(0.20));
+    mat.colorNode = mix(procGrass, vibrantParkOrtho, orthoMask.mul(0.84));
+  } else {
+    mat.colorNode = procGrass;
+  }
+
   return mat;
 }
 
@@ -87,103 +111,145 @@ export function createWaterMaterial(): THREE.MeshStandardNodeMaterial {
 }
 
 /**
- * Material arquitectónico estilo Apple Maps DCE:
- * - Usa `aLocalHeight` para AO de contacto, zócalo de planta baja (~3.6m) e imposta sutil.
- * - Usa `aTopDist` para sombra bajo cornisa + filo luminoso superior.
- * - Usa ritmo de vanos/ventanas ultra sutil sin polígonos adicionales ni aliasing.
- * - Usa `aRoofType` (0 = fachada, 1 = azotea plana, 2 = tejado inclinado/cúpula, 3 = peto/casetón).
+ * Material arquitectónico híbrido de Madrid:
+ * - Fachadas: DataArrayTexture PBR de 6 estilos madrileños (Ensanche, Palacio, Ladrillo,
+ *   Residencial moderno, Muro Cortina de cristal y Bajos Comerciales de calle) con relieve (bump)
+ *   y rugosidad/reflejo por ventana.
+ * - Cubiertas y tejados: Ortofoto aérea real IGN PNOA proyectada en coordenadas métricas de mundo,
+ *   con transición suave al tono arquitectónico fuera de la ventana activa.
  */
-export function createBuildingMaterial(): THREE.MeshStandardNodeMaterial {
+export function createBuildingMaterial(
+  ortho?: PnoaOrthoClipmap,
+  facades?: MadridFacadeArrays
+): THREE.MeshStandardNodeMaterial {
   const mat = new THREE.MeshStandardNodeMaterial({
-    roughness: 0.89,
-    metalness: 0.02,
+    roughness: 0.88,
+    metalness: 0.03,
   });
 
   const baseTone = vertexColor();
   const localHeight = attribute('aLocalHeight', 'float');
   const topDist = attribute('aTopDist', 'float');
   const roofType = attribute('aRoofType', 'float');
+  const wallStyle = attribute('aWallStyle', 'float');
 
   const isWall = float(1.0).sub(step(float(0.5), roofType));
   const isFlatRoof = step(float(0.5), roofType).mul(float(1.0).sub(step(float(1.5), roofType)));
   const isSlopedRoof = step(float(1.5), roofType).mul(float(1.0).sub(step(float(2.5), roofType)));
-  const isTrim = step(float(2.5), roofType);
+  const isTrim = step(float(2.5), roofType).mul(float(1.0).sub(step(float(3.5), roofType)));
+  const isSlateDome = step(float(3.5), roofType).mul(float(1.0).sub(step(float(4.5), roofType)));
+  const isGoldDetail = step(float(4.5), roofType);
 
   const totalHeight = localHeight.add(topDist);
   const isMultiStory = smoothstep(float(5.5), float(7.5), totalHeight);
 
   // AO de acera + sombra bajo cornisa + filo superior
-  const groundAo = mix(float(0.82), float(1.0), smoothstep(float(0.0), float(3.8), localHeight));
-  const underCorniceAo = mix(float(0.91), float(1.0), smoothstep(float(0.35), float(2.2), topDist));
-  const corniceLip = smoothstep(float(0.45), float(0.0), topDist).mul(0.045);
+  const groundAo = mix(float(0.80), float(1.0), smoothstep(float(0.0), float(3.4), localHeight));
+  const underCorniceAo = mix(float(0.90), float(1.0), smoothstep(float(0.35), float(2.2), topDist));
+  const corniceLip = smoothstep(float(0.45), float(0.0), topDist).mul(0.048);
 
-  // Zócalo de planta baja + línea de imposta arquitectónica (~3.6 m)
+  // Zona de planta baja comercial (localHeight < 3.82 m) en edificios de varias plantas
   const plinthMask = float(1.0)
-    .sub(smoothstep(float(3.35), float(3.75), localHeight))
+    .sub(smoothstep(float(3.65), float(3.98), localHeight))
     .mul(isMultiStory)
     .mul(isWall);
-  const plinthShade = mix(float(1.0), float(0.945), plinthMask);
-  const beltCourse = smoothstep(float(0.34), float(0.0), localHeight.sub(3.62).abs())
-    .mul(isMultiStory)
-    .mul(isWall)
-    .mul(0.032);
 
-  // Ritmo minimalista de plantas y huecos de ventana usando tangente exacta al muro
+  // Coordenadas métricas exactas sobre el plano de fachada
   const alongWallM = positionWorld.x.mul(normalWorld.z).sub(positionWorld.z.mul(normalWorld.x));
-  const bayPhase = fract(alongWallM.div(3.25));
-  const floorPhase = fract(localHeight.sub(3.8).div(3.35));
 
-  const horizWin = smoothstep(float(0.18), float(0.31), bayPhase).mul(
-    smoothstep(float(0.82), float(0.69), bayPhase)
-  );
-  const vertWin = smoothstep(float(0.22), float(0.35), floorPhase).mul(
-    smoothstep(float(0.82), float(0.69), floorPhase)
-  );
-  const abovePlinth = smoothstep(float(3.95), float(4.45), localHeight);
-  const belowCornice = smoothstep(float(1.05), float(1.75), topDist);
+  let wallColor: ReturnType<typeof mix> | typeof baseTone = baseTone;
+  let wallRoughness = float(0.88);
+  let wallMetalness = float(0.03);
+  let wallBumpHeight = float(0.5);
 
-  const winMask = horizWin
-    .mul(vertWin)
-    .mul(abovePlinth)
-    .mul(belowCornice)
-    .mul(isMultiStory)
-    .mul(isWall);
+  if (facades) {
+    const upperUV = vec2(alongWallM.div(13.0), localHeight.sub(3.82).div(13.4));
+    const groundUV = vec2(alongWallM.div(13.0), localHeight.div(3.82));
+    const upperLayer = int(wallStyle.add(0.25));
+    const groundLayer = int(5);
 
-  const floorBands = sin(localHeight.mul(1.88)).mul(0.010).add(0.990);
+    const upperAlbedo = texture(facades.albedoArray, upperUV).depth(upperLayer);
+    const upperPbr = texture(facades.pbrArray, upperUV).depth(upperLayer);
+    const groundAlbedo = texture(facades.albedoArray, groundUV).depth(groundLayer);
+    const groundPbr = texture(facades.pbrArray, groundUV).depth(groundLayer);
+
+    // Las torres acristaladas (estilo >= 3.5) mantienen muro cortina hasta ras de acera
+    const isGlassTower = step(float(3.5), wallStyle);
+    const shopfrontBlend = plinthMask.mul(float(1.0).sub(isGlassTower));
+
+    const texAlbedo = mix(upperAlbedo.rgb, groundAlbedo.rgb, shopfrontBlend);
+    const texPbr = mix(upperPbr, groundPbr, shopfrontBlend);
+
+    // tintMask (alpha de pbrArray): permite que el color de edificio tiña revoco/piedra
+    // pero respete los ladrillos, forjas negras, escaparates y vidrio reflectante
+    const tintedAlbedo = mix(texAlbedo, texAlbedo.mul(baseTone), texPbr.a.mul(0.82));
+
+    wallColor = tintedAlbedo;
+    wallRoughness = texPbr.g;
+    wallMetalness = texPbr.b.mul(0.58);
+    wallBumpHeight = texPbr.r;
+  }
+
   const wallShade = mix(
     float(1.0),
-    underCorniceAo.mul(floorBands).mul(plinthShade).add(corniceLip).add(beltCourse),
+    underCorniceAo.add(corniceLip),
     isWall
   );
 
-  const flatTone = mix(baseTone.mul(0.96), color(PALETTE.roofFlat), float(0.55));
-  const slopedTone = mix(baseTone.mul(0.90), color(PALETTE.roofSloped), float(0.62));
+  let flatTone: ReturnType<typeof mix> | typeof baseTone = mix(
+    baseTone.mul(0.95),
+    color(PALETTE.roofFlat),
+    float(0.52)
+  );
+  let slopedTone: ReturnType<typeof mix> | typeof baseTone = mix(
+    baseTone.mul(0.88),
+    color(PALETTE.roofSloped),
+    float(0.60)
+  );
   const trimTone = mix(baseTone, color(0xf6f3ee), float(0.54));
 
-  let surfaceColor = mix(baseTone, flatTone, isFlatRoof);
+  if (ortho) {
+    const { orthoColor, orthoMask } = ortho.sampleWorldOrtho();
+    // Tejados reales de Madrid desde PNOA (tejas terracota, cubiertas, patios)
+    const roofPhotoFlat = mix(orthoColor.rgb, flatTone, float(0.14));
+    const roofPhotoSloped = mix(orthoColor.rgb, slopedTone, float(0.22));
+    flatTone = mix(flatTone, roofPhotoFlat, orthoMask.mul(0.88));
+    slopedTone = mix(slopedTone, roofPhotoSloped, orthoMask.mul(0.82));
+  }
+
+  const slateTone = color(0x272c36);
+  const goldTone = color(0xd8b14e);
+
+  let surfaceColor = mix(baseTone, wallColor, isWall);
+  surfaceColor = mix(surfaceColor, flatTone, isFlatRoof);
   surfaceColor = mix(surfaceColor, slopedTone, isSlopedRoof);
   surfaceColor = mix(surfaceColor, trimTone, isTrim);
-  surfaceColor = mix(surfaceColor, color(0xc9d2de), winMask.mul(0.13));
+  surfaceColor = mix(surfaceColor, slateTone, isSlateDome);
+  surfaceColor = mix(surfaceColor, goldTone, isGoldDetail);
+
+  const nonWallRough = mix(float(0.89), float(0.42), isSlateDome);
+  const finalRough = mix(nonWallRough, float(0.24), isGoldDetail);
+  const nonWallMetal = mix(float(0.02), float(0.26), isSlateDome);
+  const finalMetal = mix(nonWallMetal, float(0.86), isGoldDetail);
 
   mat.colorNode = surfaceColor.mul(groundAo).mul(wallShade);
+  mat.roughnessNode = mix(finalRough, wallRoughness, isWall);
+  mat.metalnessNode = mix(finalMetal, wallMetalness, isWall);
+  if (facades) {
+    mat.normalNode = bumpMap(wallBumpHeight.mul(isWall), float(0.16));
+  }
+
   return mat;
 }
 
 /**
  * Material único para toda la red viaria (1 draw call por chunk):
- * `aRoadClass`:
- *   -1 = bordillo inferior (cubierto limpiamente por el asfalto en los cruces)
- *    0 = sendero de parque / calle peatonal
- *    1 = residencial / servicio (sin líneas discontinuas)
- *    2 = secundaria / terciaria
- *    3 = primaria / gran avenida
- * `aLaneCount`: 0..3 divisores de carril discontinuos
- * `aMarkMask`: 0 en intersecciones / rotondas, 1 en tramos abiertos
- * `aCrosswalk`: 1 en bandas de paso de cebra antes de cruces
+ * - Combina asfalto PBR micro-granulado y baldosa madrileña peatonal en coordenadas de mundo.
+ * - Mantiene líneas discontinuas y pasos de cebra nítidos con desgaste realista sobre el árido.
  */
-export function createRoadMaterial(): THREE.MeshStandardNodeMaterial {
+export function createRoadMaterial(roadTex?: MadridRoadTextures): THREE.MeshStandardNodeMaterial {
   const mat = new THREE.MeshStandardNodeMaterial({
-    roughness: 0.88,
+    roughness: 0.86,
     metalness: 0.04,
     polygonOffset: true,
     polygonOffsetFactor: -3,
@@ -207,14 +273,34 @@ export function createRoadMaterial(): THREE.MeshStandardNodeMaterial {
   const isRes = step(float(0.5), roadClass).mul(float(1.0).sub(step(float(1.5), roadClass)));
   const isSec = step(float(1.5), roadClass).mul(float(1.0).sub(step(float(2.5), roadClass)));
   const isPri = step(float(2.5), roadClass);
+  const isVehicleAsphalt = step(float(0.5), roadClass);
 
   const surfaceWithPed = mix(curbColor, pedColor, isPed);
   const surfaceWithRes = mix(surfaceWithPed, resAsphalt, isRes);
   const surfaceWithSec = mix(surfaceWithRes, secAsphalt, isSec);
-  const surfaceBase = mix(surfaceWithSec, priAsphalt, isPri);
+  const surfacePlain = mix(surfaceWithSec, priAsphalt, isPri);
+
+  let surfaceBase = surfacePlain;
+  let roadBump = float(0.5);
+  let roadRough = float(0.86);
+
+  if (roadTex) {
+    const asphaltUV = positionWorld.xz.mul(0.14);
+    const pavingUV = positionWorld.xz.mul(0.28);
+
+    const aspAlbedo = texture(roadTex.asphaltAlbedo, asphaltUV);
+    const aspPbr = texture(roadTex.asphaltPbr, asphaltUV);
+    const pavAlbedo = texture(roadTex.pavingAlbedo, pavingUV);
+    const pavPbr = texture(roadTex.pavingPbr, pavingUV);
+
+    const surfaceTex = mix(pavAlbedo.rgb, aspAlbedo.rgb, isVehicleAsphalt);
+    surfaceBase = mix(surfacePlain, surfacePlain.mul(surfaceTex), float(0.75));
+    roadBump = mix(pavPbr.r, aspPbr.r, isVehicleAsphalt);
+    roadRough = mix(pavPbr.g, aspPbr.g, isVehicleAsphalt);
+  }
 
   // Patrón discontinuo longitudinal solo en tramos con markMask = 1 y roadClass >= 2
-  const dashPattern = step(float(0.56), fract(roadUV.y.mul(0.105)));
+  const dashPattern = step(float(0.56), fractToNode(roadUV.y.mul(0.105)));
   const isMarkable = step(float(1.5), roadClass).mul(step(float(0.5), markMask));
 
   const hasOneLane = step(float(0.5), laneCount).mul(float(1.0).sub(step(float(1.5), laneCount)));
@@ -241,16 +327,25 @@ export function createRoadMaterial(): THREE.MeshStandardNodeMaterial {
 
   // Pasos de cebra (aCrosswalk > 0.5) transversales a la calzada
   const inCrossWidth = step(float(0.08), roadUV.x).mul(float(1.0).sub(step(float(0.92), roadUV.x)));
-  const zebraStripes = step(float(0.46), fract(roadUV.x.mul(10.0)));
+  const zebraStripes = step(float(0.46), fractToNode(roadUV.x.mul(10.0)));
   const crossMask = step(float(0.5), crosswalkAttr)
     .mul(inCrossWidth)
     .mul(zebraStripes)
     .mul(step(float(1.5), roadClass));
 
-  const finalMarkMask = max(laneMask.mul(0.84), crossMask.mul(0.92));
+  const finalMarkMask = max(laneMask.mul(0.84), crossMask.mul(0.90));
+  const wornMarking = roadTex ? mix(markingColor, surfaceBase, float(0.14)) : markingColor;
 
-  mat.colorNode = mix(surfaceBase, markingColor, finalMarkMask);
+  mat.colorNode = mix(surfaceBase, wornMarking, finalMarkMask);
+  mat.roughnessNode = mix(roadRough, float(0.72), finalMarkMask.mul(0.6));
+  if (roadTex) {
+    mat.normalNode = bumpMap(roadBump, float(0.14));
+  }
   return mat;
+}
+
+function fractToNode(x: ReturnType<typeof float>): ReturnType<typeof float> {
+  return x.fract();
 }
 
 export function createTreeMaterial(): THREE.MeshStandardNodeMaterial {

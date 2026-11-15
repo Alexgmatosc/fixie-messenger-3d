@@ -10,7 +10,12 @@ import {
   createWaterMaterial,
   PALETTE,
 } from '../materials/CityMaterials';
+import {
+  createMadridFacadeArrays,
+  createMadridRoadTextures,
+} from '../materials/MadridTextureAtlas';
 import type { ChunkPayload, PolygonFeature, RoadFeature } from '../types/mapData';
+import { PnoaOrthoClipmap } from './PnoaOrthoClipmap';
 
 export interface SharedCityResources {
   groundMaterial: THREE.MeshStandardNodeMaterial;
@@ -20,6 +25,7 @@ export interface SharedCityResources {
   buildingMaterial: THREE.MeshStandardNodeMaterial;
   treeMaterial: THREE.MeshStandardNodeMaterial;
   treePrototype: THREE.BufferGeometry;
+  orthoClipmap: PnoaOrthoClipmap;
 }
 
 export interface ChunkBuildResult {
@@ -125,14 +131,19 @@ function createCombinedTreePrototype(): THREE.BufferGeometry {
 }
 
 export function createSharedCityResources(): SharedCityResources {
+  const orthoClipmap = new PnoaOrthoClipmap();
+  const facades = createMadridFacadeArrays();
+  const roadTex = createMadridRoadTextures();
+
   return {
-    groundMaterial: createGroundMaterial(),
-    parkMaterial: createParkMaterial(),
+    groundMaterial: createGroundMaterial(orthoClipmap),
+    parkMaterial: createParkMaterial(orthoClipmap),
     waterMaterial: createWaterMaterial(),
-    roadMaterial: createRoadMaterial(),
-    buildingMaterial: createBuildingMaterial(),
+    roadMaterial: createRoadMaterial(roadTex),
+    buildingMaterial: createBuildingMaterial(orthoClipmap, facades),
     treeMaterial: createTreeMaterial(),
     treePrototype: createCombinedTreePrototype(),
+    orthoClipmap,
   };
 }
 
@@ -1040,6 +1051,8 @@ interface BuildingEmitBuffers {
   localHeights: number[];
   topDists: number[];
   roofTypes: number[];
+  wallStyles: number[];
+  currentWallStyle: number;
 }
 
 function pushBuildingTri(
@@ -1057,6 +1070,7 @@ function pushBuildingTri(
   buf.localHeights.push(alh, blh, clh);
   buf.topDists.push(atd, btd, ctd);
   buf.roofTypes.push(roofType, roofType, roofType);
+  buf.wallStyles.push(buf.currentWallStyle, buf.currentWallStyle, buf.currentWallStyle);
 }
 
 function pushBuildingAutoTri(
@@ -1230,6 +1244,58 @@ function emitOrientedRooftopBox(
  * - Soporta `building:part`, `minHeight`, tejados reales OSM (`pyramidal`, `dome`, `mansard`,
  *   `hipped`, `gabled`, `skillion`) y azoteas con peto perimetral + casetones procedurales.
  */
+function chooseBuildingWallStyle(
+  b: ChunkPayload['buildings'][number],
+  hVal: number,
+  worldZ: number
+): number {
+  const name = b.name?.toLowerCase() ?? '';
+  const hasClassicRoof =
+    b.roofShape === 'dome' ||
+    b.roofShape === 'mansard' ||
+    b.roofShape === 'pyramidal' ||
+    b.roofShape === 'hipped' ||
+    b.roofShape === 'gabled';
+  const isHistoricName =
+    /palacio|museo|banco|ayuntamiento|congreso|teatro|cibeles|metr[oó]polis|telefon|telef[oó]nica|real|prado|estaci|iglesia|parroquia|catedral/.test(
+      name
+    );
+
+  // Torres de cristal solo en distrito financiero norte (AZCA / Cuatro Torres: z < -2530)
+  // o rascacielos modernos >= 54 m sin cubierta histórica
+  const inNorthBusinessDistrict = worldZ < -2530;
+  if (
+    !hasClassicRoof &&
+    !isHistoricName &&
+    (/bbva|picasso|azca|cuatro torres|cristal|cepsa/.test(name) ||
+      (inNorthBusinessDistrict && b.height >= 30) ||
+      b.height >= 54)
+  ) {
+    return 4; // Muro cortina acristalado azul-plata
+  }
+
+  // En Gran Vía, Alcalá, Cibeles y Centro: edificios altos/singulares y cúpulas son piedra caliza Beaux-Arts
+  if (
+    b.roofShape === 'dome' ||
+    b.roofShape === 'mansard' ||
+    b.roofShape === 'pyramidal' ||
+    isHistoricName ||
+    b.height >= 23
+  ) {
+    return /parroquia|iglesia|san jos[eé]/.test(name) ? 2 : 1;
+  }
+
+  if (b.height >= 15) {
+    if (hVal < 0.52) return 0; // Ensanche clásico (balcones forja + revoco claro)
+    if (hVal < 0.80) return 2; // Ladrillo madrileño fino
+    return 1; // Piedra noble
+  }
+
+  if (hVal < 0.36) return 2;
+  if (hVal < 0.72) return 0;
+  return 3;
+}
+
 function buildBuildingsMesh(
   buildings: ChunkPayload['buildings'],
   material: THREE.Material,
@@ -1242,6 +1308,8 @@ function buildBuildingsMesh(
     localHeights: [],
     topDists: [],
     roofTypes: [],
+    wallStyles: [],
+    currentWallStyle: 0,
   };
   const tempColor = new THREE.Color();
 
@@ -1277,9 +1345,13 @@ function buildBuildingsMesh(
     const totalH = b.height;
     const roofShape = b.roofShape;
     const hasCustomRoof = Boolean(roofShape && roofShape !== 'flat');
-    const roofH = hasCustomRoof
+    const isMetropolisDome = b.id === 'way/332068538';
+    let roofH = hasCustomRoof
       ? Math.min(Math.max(1.2, totalH - minH - 1.5), Math.max(1.2, b.roofHeight ?? 3.5))
       : 0;
+    if (roofShape === 'dome' && totalH >= 22) {
+      roofH = Math.max(roofH, isMetropolisDome ? 6.8 : 4.2);
+    }
     const wallTopLocal = hasCustomRoof ? Math.max(minH + 1.8, totalH - roofH) : totalH;
     const wallSpan = Math.max(1.0, wallTopLocal - minH);
 
@@ -1289,6 +1361,7 @@ function buildBuildingsMesh(
     const botLH = minH > 0.2 ? minH : 0;
 
     const hVal = hashString(b.id);
+    buf.currentWallStyle = chooseBuildingWallStyle(b, hashString(b.id + '_ws'), cz);
     const toneHex = PALETTE.buildingTones[Math.floor(hVal * PALETTE.buildingTones.length)];
     tempColor.setHex(toneHex);
     const shade = 0.96 + hashString(b.id + '_s') * 0.08;
@@ -1399,8 +1472,10 @@ function buildBuildingsMesh(
     };
 
     // 2. Cubierta real OSM o detalles procedurales Apple Maps
+    const isDarkSlateMonument = roofShape === 'pyramidal' && totalH >= 20;
     if ((roofShape === 'pyramidal' || roofShape === 'round') && isStarShaped) {
       const n = parsed.outer.length;
+      const rType = isDarkSlateMonument ? 4 : 2;
       for (let i = 0; i < n; i++) {
         const p0 = parsed.outer[i];
         const p1 = parsed.outer[(i + 1) % n];
@@ -1409,12 +1484,13 @@ function buildBuildingsMesh(
           p0.x, wallTopY, -p0.y, wallTopLocal, 5,
           p1.x, wallTopY, -p1.y, wallTopLocal, 5,
           cx, peakY, cz, wallTopLocal + roofH, 5,
-          cr, cg, cb, 2
+          cr, cg, cb, rType
         );
       }
     } else if (roofShape === 'dome' && isStarShaped) {
-      const ringsR = [1.0, 0.72, 0.38];
-      const ringsH = [0.0, 0.58, 0.90];
+      // Cúpulas madrileñas de pizarra oscura + corona / linterna dorada en cúpulas monumentales
+      const ringsR = [1.0, 0.80, 0.48, 0.20];
+      const ringsH = [0.0, 0.44, 0.78, 0.96];
       const n = parsed.outer.length;
       const scaleRing = (rFrac: number, hFrac: number) => ({
         y: wallTopY + roofH * hFrac,
@@ -1424,8 +1500,13 @@ function buildBuildingsMesh(
       const r0 = scaleRing(ringsR[0], ringsH[0]);
       const r1 = scaleRing(ringsR[1], ringsH[1]);
       const r2 = scaleRing(ringsR[2], ringsH[2]);
-      const pairs: [typeof r0, typeof r1][] = [[r0, r1], [r1, r2]];
-      for (const [lo, hi] of pairs) {
+      const r3 = scaleRing(ringsR[3], ringsH[3]);
+      const pairs: [typeof r0, typeof r1, number][] = [
+        [r0, r1, 4],
+        [r1, r2, 4],
+        [r2, r3, totalH >= 26 ? 5 : 4],
+      ];
+      for (const [lo, hi, rType] of pairs) {
         for (let i = 0; i < n; i++) {
           const j = (i + 1) % n;
           pushBuildingAutoTri(
@@ -1433,30 +1514,83 @@ function buildBuildingsMesh(
             lo.pts[i][0], lo.y, lo.pts[i][1], lo.lh, 5,
             lo.pts[j][0], lo.y, lo.pts[j][1], lo.lh, 5,
             hi.pts[j][0], hi.y, hi.pts[j][1], hi.lh, 5,
-            cr, cg, cb, 2
+            cr, cg, cb, rType
           );
           pushBuildingAutoTri(
             buf,
             lo.pts[i][0], lo.y, lo.pts[i][1], lo.lh, 5,
             hi.pts[j][0], hi.y, hi.pts[j][1], hi.lh, 5,
             hi.pts[i][0], hi.y, hi.pts[i][1], hi.lh, 5,
-            cr, cg, cb, 2
+            cr, cg, cb, rType
           );
         }
       }
+      const capType = totalH >= 26 ? 5 : 4;
       for (let i = 0; i < n; i++) {
         const j = (i + 1) % n;
         pushBuildingAutoTri(
           buf,
-          r2.pts[i][0], r2.y, r2.pts[i][1], r2.lh, 5,
-          r2.pts[j][0], r2.y, r2.pts[j][1], r2.lh, 5,
+          r3.pts[i][0], r3.y, r3.pts[i][1], r3.lh, 5,
+          r3.pts[j][0], r3.y, r3.pts[j][1], r3.lh, 5,
           cx, peakY, cz, wallTopLocal + roofH, 5,
-          cr, cg, cb, 2
+          cr, cg, cb, capType
         );
+      }
+
+      // Escultura de la Victoria Alada dorada y linterna en Edificio Metrópolis (Alcalá / Gran Vía)
+      if (isMetropolisDome) {
+        const pedBase = peakY - 0.1;
+        const pedTop = peakY + 1.85;
+        const pedR = 0.72;
+        const figTop = pedTop + 2.45;
+        // Pedestal octagonal dorado
+        for (let k = 0; k < 6; k++) {
+          const a0 = (k / 6) * Math.PI * 2;
+          const a1 = ((k + 1) / 6) * Math.PI * 2;
+          const x0 = cx + Math.cos(a0) * pedR;
+          const z0 = cz + Math.sin(a0) * pedR;
+          const x1 = cx + Math.cos(a1) * pedR;
+          const z1 = cz + Math.sin(a1) * pedR;
+          pushWallQuad(
+            buf,
+            x0, z0, x1, z1,
+            pedBase, pedTop,
+            wallTopLocal + roofH, wallTopLocal + roofH + 1.8,
+            1.5, 0.2,
+            cr, cg, cb, 5
+          );
+          // Cuerpo estilizado de la Victoria
+          pushBuildingAutoTri(
+            buf,
+            cx + Math.cos(a0) * 0.36, pedTop, cz + Math.sin(a0) * 0.36, wallTopLocal + roofH + 1.8, 1.5,
+            cx + Math.cos(a1) * 0.36, pedTop, cz + Math.sin(a1) * 0.36, wallTopLocal + roofH + 1.8, 1.5,
+            cx, figTop, cz, wallTopLocal + roofH + 4.3, 0.1,
+            cr, cg, cb, 5
+          );
+        }
+        // Alas doradas desplegadas
+        const wingY0 = pedTop + 1.45;
+        const wingY1 = pedTop + 3.15;
+        for (const side of [-1, 1]) {
+          pushBuildingAutoTri(
+            buf,
+            cx, wingY0, cz, wallTopLocal + roofH + 3.2, 0.8,
+            cx + side * 2.25, wingY1, cz - 0.55, wallTopLocal + roofH + 4.8, 0.1,
+            cx + side * 0.85, wingY0 - 0.45, cz + 0.25, wallTopLocal + roofH + 2.8, 1.0,
+            cr, cg, cb, 5
+          );
+          pushBuildingAutoTri(
+            buf,
+            cx, wingY0, cz, wallTopLocal + roofH + 3.2, 0.8,
+            cx + side * 0.85, wingY0 - 0.45, cz + 0.25, wallTopLocal + roofH + 2.8, 1.0,
+            cx + side * 2.25, wingY1, cz - 0.55, wallTopLocal + roofH + 4.8, 0.1,
+            cr, cg, cb, 5
+          );
+        }
       }
     } else if (roofShape === 'mansard' && isStarShaped) {
       const insetScale = 1 - Math.min(0.32, 2.1 / minApothem);
-      emitStarInsetRoof(insetScale, 2, 1, true);
+      emitStarInsetRoof(insetScale, 4, 1, true);
     } else if (roofShape === 'gabled' && parsed.outer.length === 4 && parsed.holes.length === 0) {
       const q = parsed.outer;
       const d01 = Math.hypot(q[1].x - q[0].x, q[1].y - q[0].y);
@@ -1610,6 +1744,7 @@ function buildBuildingsMesh(
   geom.setAttribute('aLocalHeight', new THREE.Float32BufferAttribute(buf.localHeights, 1));
   geom.setAttribute('aTopDist', new THREE.Float32BufferAttribute(buf.topDists, 1));
   geom.setAttribute('aRoofType', new THREE.Float32BufferAttribute(buf.roofTypes, 1));
+  geom.setAttribute('aWallStyle', new THREE.Float32BufferAttribute(buf.wallStyles, 1));
 
   const mesh = new THREE.Mesh(geom, material);
   mesh.name = 'chunk-buildings';

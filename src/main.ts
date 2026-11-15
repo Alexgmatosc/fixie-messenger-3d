@@ -91,13 +91,13 @@ async function initApp(): Promise<void> {
   // 3. Escena, cielo e iluminación natural estilo Apple Maps DCE
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(PALETTE.sky);
-  scene.fog = new THREE.FogExp2(PALETTE.fog, 0.00028);
+  scene.fog = new THREE.FogExp2(PALETTE.fog, 0.00024);
 
-  const hemiLight = new THREE.HemisphereLight(0xcce6ff, 0xd8d2c7, 1.25);
+  const hemiLight = new THREE.HemisphereLight(0xbcdbff, 0xd8cbb8, 1.15);
   scene.add(hemiLight);
 
-  const dirLight = new THREE.DirectionalLight(0xfff7e8, 2.15);
-  dirLight.position.set(280, 440, 220);
+  const dirLight = new THREE.DirectionalLight(0xfff1d4, 2.48);
+  dirLight.position.set(280, 420, 240);
   dirLight.castShadow = true;
   dirLight.shadow.mapSize.set(1536, 1536);
   dirLight.shadow.camera.near = 60;
@@ -989,6 +989,7 @@ async function initApp(): Promise<void> {
       dirLight.target.updateMatrixWorld();
     }
 
+    resources.orthoClipmap.update(focusX, focusZ);
     chunkManager.update(focusX, focusZ);
     renderer.render(scene, camera);
 

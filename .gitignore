@@ -4,3 +4,5 @@ dist/
 *.local
 *.log
 scripts/.cache-osm/
+scripts/.cache-lod2/
+scripts/.cache-mapillary/
