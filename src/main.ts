@@ -5,7 +5,7 @@ import { PALETTE } from './materials/CityMaterials';
 import type { ChunkManifest, PoiDefinition } from './types/mapData';
 import { ChunkManager } from './world/ChunkManager';
 import { buildBaseGroundMesh, createSharedCityResources } from './world/CityBuilder';
-import { FixieAvatar, SkidTrailSystem } from './world/FixieAvatar';
+import { FixieAvatar, RIDER_PRESETS, SkidTrailSystem } from './world/FixieAvatar';
 
 const POIS: PoiDefinition[] = [
   { id: 'neptuno', label: 'Fuente de Neptuno', lon: -3.6941, lat: 40.4152, heightOffsetM: 10, category: 'landmark' },
@@ -58,6 +58,7 @@ async function initApp(): Promise<void> {
   const btnCamMap = document.getElementById('btn-cam-map') as HTMLButtonElement;
   const btnCamAerial = document.getElementById('btn-cam-aerial') as HTMLButtonElement;
   const btnCamBike = document.getElementById('btn-cam-bike') as HTMLButtonElement;
+  const btnRider = document.getElementById('btn-rider') as HTMLButtonElement;
   const btnPois = document.getElementById('btn-pois') as HTMLButtonElement;
 
   // 1. Cargar manifiesto de chunks espaciales + DEM real
@@ -184,13 +185,30 @@ async function initApp(): Promise<void> {
     slopePitch: 0,
     whipAngle: 0,
     whipVel: 0,
+    standBlend: 0,
+    hopLiftM: 0,
+    hopVel: 0,
+    wasSkidding: false,
+    lastSkidTurn: 0,
+    trackStandPhase: 0,
+    lookYaw: 0,
     chaseView: true,
-    chaseDist: 6.8,
+    chaseDist: 4.55,
     camOrbitYaw: 0,
-    camPitch: 0.24,
-    camPos: new THREE.Vector3(-11, startGroundY + 3.5, 82),
-    camLook: new THREE.Vector3(-11, startGroundY + 1.2, 65),
+    camPitch: 0.16,
+    camPos: new THREE.Vector3(-11, startGroundY + 2.4, 80),
+    camLook: new THREE.Vector3(-11, startGroundY + 1.15, 65),
   };
+
+  let riderIndex = 0;
+  const cycleRiderPreset = (): void => {
+    riderIndex = (riderIndex + 1) % RIDER_PRESETS.length;
+    const preset = RIDER_PRESETS[riderIndex];
+    fixieAvatar.setPreset(preset.id);
+    btnRider.textContent = `Rider: ${preset.label}`;
+    btnRider.title = `${preset.tagline} (pulsa R para cambiar)`;
+  };
+  btnRider.addEventListener('click', cycleRiderPreset);
 
   const keys = new Set<string>();
   window.addEventListener('keydown', (e) => {
@@ -198,6 +216,9 @@ async function initApp(): Promise<void> {
     if (e.code === 'KeyC' && !e.repeat && cameraMode === 'bike') {
       bikeState.chaseView = !bikeState.chaseView;
       fixieAvatar.root.visible = bikeState.chaseView;
+    }
+    if (e.code === 'KeyR' && !e.repeat && cameraMode === 'bike') {
+      cycleRiderPreset();
     }
     if (
       e.code === 'Space' ||
@@ -322,6 +343,7 @@ async function initApp(): Promise<void> {
 
     mapControls.enabled = mode === 'map';
     flightHud.hidden = mode === 'map';
+    btnRider.hidden = mode !== 'bike';
     fixieAvatar.root.visible = mode === 'bike' && bikeState.chaseView;
     skidTrail.mesh.visible = mode === 'bike';
 
@@ -368,26 +390,34 @@ async function initApp(): Promise<void> {
       bikeState.velZ = 0;
       bikeState.whipAngle = 0;
       bikeState.whipVel = 0;
+      bikeState.standBlend = 0.7;
+      bikeState.hopLiftM = 0;
+      bikeState.hopVel = 0;
+      bikeState.wasSkidding = false;
+      bikeState.lastSkidTurn = 0;
       skidTrail.breakTrail();
       bikeState.camOrbitYaw = 0;
       const fwdX = -Math.sin(freeState.yaw);
       const fwdZ = -Math.cos(freeState.yaw);
       bikeState.camPos.set(
         freeState.x - fwdX * bikeState.chaseDist,
-        gy + 3.0,
+        gy + 2.2,
         freeState.z - fwdZ * bikeState.chaseDist
       );
-      bikeState.camLook.set(freeState.x + fwdX * 8, gy + 1.35, freeState.z + fwdZ * 8);
+      bikeState.camLook.set(freeState.x + fwdX * 5.5, gy + 1.15, freeState.z + fwdZ * 5.5);
       fixieAvatar.update(
         {
           speedMs: 0,
-          steerAngle: 0,
+          steerAngle: 0.34,
           leanAngle: 0,
-          crankAngle: bikeState.crankAngle,
+          crankAngle: Math.PI * 0.5,
           slopePitch: 0,
           isSprinting: false,
           isSkidding: false,
           whipAngle: 0,
+          standBlend: 0.7,
+          hopLiftM: 0,
+          lookYaw: 0,
         },
         freeState.yaw,
         freeState.x,
@@ -397,7 +427,7 @@ async function initApp(): Promise<void> {
       );
       flightModeLabel.textContent = 'Fixie (Calle)';
       flightHint.innerHTML =
-        '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> pedalear/girar · <kbd>Espacio</kbd>+<kbd>A</kbd>/<kbd>D</kbd> skid/bamboleo · <kbd>Shift</kbd> sprint · <kbd>C</kbd> cámara';
+        '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> pedalear · <kbd>Espacio</kbd>+<kbd>A</kbd>/<kbd>D</kbd> hop-skid/bamboleo · <kbd>Shift</kbd> sprint · <kbd>R</kbd> rider · <kbd>C</kbd> cámara';
     } else {
       camera.fov = 48;
       camera.updateProjectionMatrix();
@@ -675,19 +705,62 @@ async function initApp(): Promise<void> {
       const bikeY = groundY + 0.24;
       freeState.y = bikeY;
 
-      // Estado visual del avatar fixie
-      const targetSteer = isSkidding
-        ? turnInput * 0.18 - bikeState.whipAngle * 0.52
-        : turnInput * (0.44 - Math.min(0.24, Math.abs(bikeState.speedMs) * 0.015));
-      const targetLean = isSkidding
-        ? turnInput * 0.32 + bikeState.whipAngle * 0.24
-        : turnInput * Math.min(0.42, Math.abs(bikeState.speedMs) * 0.032);
+      // Estado visual + mecánicas propias de piñón fijo
+      const isTrackStand = nextSpeedMag < 1.15 && forwardInput === 0 && !isSkidding;
+      if (isTrackStand) {
+        bikeState.trackStandPhase += dt * 2.4;
+      }
+
+      // Saltito trasero (hop-skid) al clavar bloqueo o cambiar rápido de flanco en el bamboleo
+      if (isSkidding && !bikeState.wasSkidding) {
+        bikeState.hopVel = 1.25;
+      } else if (
+        isSkidding &&
+        turnInput !== 0 &&
+        bikeState.lastSkidTurn !== 0 &&
+        turnInput !== bikeState.lastSkidTurn
+      ) {
+        bikeState.hopVel = Math.max(bikeState.hopVel, 0.92);
+      }
+      bikeState.wasSkidding = isSkidding;
+      if (isSkidding && turnInput !== 0) {
+        bikeState.lastSkidTurn = turnInput;
+      } else if (!isSkidding) {
+        bikeState.lastSkidTurn = 0;
+      }
+
+      bikeState.hopVel -= 19.5 * dt;
+      bikeState.hopLiftM = Math.max(0, bikeState.hopLiftM + bikeState.hopVel * dt);
+      if (bikeState.hopLiftM <= 0 && bikeState.hopVel < 0) {
+        bikeState.hopVel = 0;
+      }
+
+      const isStandingSprint = !isSkidding && ((sprint && forwardInput > 0) || (forwardInput > 0 && nextSpeedMag < 7.2));
+      const targetStand = isTrackStand ? 0.72 : isStandingSprint ? 1.0 : 0.0;
+      bikeState.standBlend += (targetStand - bikeState.standBlend) * Math.min(1, dt * 8.5);
+
+      const targetSteer = isTrackStand
+        ? 0.36 + Math.sin(bikeState.trackStandPhase) * 0.06
+        : isSkidding
+          ? turnInput * 0.18 - bikeState.whipAngle * 0.52
+          : turnInput * (0.44 - Math.min(0.24, Math.abs(bikeState.speedMs) * 0.015));
+
+      const targetLean = isTrackStand
+        ? Math.sin(bikeState.trackStandPhase * 0.85) * 0.032
+        : isSkidding
+          ? turnInput * 0.34 + bikeState.whipAngle * 0.24
+          : turnInput * Math.min(0.44, Math.abs(bikeState.speedMs) * 0.032);
+
       const targetSlopePitch = Math.atan(gradePct / 100);
+      const targetLookYaw = isTrackStand
+        ? 0.12
+        : turnInput * 0.24 - bikeState.whipAngle * 0.35;
 
       const animSmooth = Math.min(1, dt * 13);
       bikeState.steerAngle += (targetSteer - bikeState.steerAngle) * animSmooth;
       bikeState.leanAngle += (targetLean - bikeState.leanAngle) * animSmooth;
       bikeState.slopePitch += (targetSlopePitch - bikeState.slopePitch) * Math.min(1, dt * 8);
+      bikeState.lookYaw += (targetLookYaw - bikeState.lookYaw) * Math.min(1, dt * 10);
 
       if (isSkidding) {
         const lockedCrank = Math.round((bikeState.crankAngle - Math.PI * 0.5) / Math.PI) * Math.PI + Math.PI * 0.5;
@@ -699,9 +772,18 @@ async function initApp(): Promise<void> {
           bikeState.whipAngle
         );
         const rearGroundY = terrain.getHeightAtXZ(rx, rz);
-        skidTrail.addPoint(rx, rearGroundY + 0.255, rz);
+        if (bikeState.hopLiftM < 0.018) {
+          skidTrail.addPoint(rx, rearGroundY + 0.255, rz);
+        } else {
+          skidTrail.breakTrail();
+        }
+      } else if (isTrackStand) {
+        const standCrank = Math.round((bikeState.crankAngle - Math.PI * 0.5) / Math.PI) * Math.PI + Math.PI * 0.5;
+        bikeState.crankAngle += (standCrank - bikeState.crankAngle + Math.sin(bikeState.trackStandPhase) * 0.08) * Math.min(1, dt * 10);
+        skidTrail.breakTrail();
       } else {
-        bikeState.crankAngle += (bikeState.speedMs / 0.85) * dt;
+        // Piñón fijo real: las bielas SIEMPRE giran acopladas a la rueda trasera (sin rueda libre)
+        bikeState.crankAngle += (bikeState.speedMs / (0.345 * 2.45)) * dt;
         skidTrail.breakTrail();
       }
 
@@ -715,6 +797,9 @@ async function initApp(): Promise<void> {
           isSprinting: sprint && forwardInput > 0 && !isSkidding,
           isSkidding,
           whipAngle: bikeState.whipAngle,
+          standBlend: bikeState.standBlend,
+          hopLiftM: bikeState.hopLiftM,
+          lookYaw: bikeState.lookYaw,
         },
         freeState.yaw,
         freeState.x,
@@ -737,25 +822,25 @@ async function initApp(): Promise<void> {
         if (!freeState.isDragging && Math.abs(bikeState.speedMs) > 1.8) {
           bikeState.camOrbitYaw *= Math.exp(-dt * 2.4);
         }
-        const camYaw = travelHeading + bikeState.camOrbitYaw - bikeState.whipAngle * 0.14;
+        const camYaw = travelHeading + bikeState.camOrbitYaw - bikeState.whipAngle * 0.15;
         const camDirX = -Math.sin(camYaw);
         const camDirZ = -Math.cos(camYaw);
 
         const horizDist = bikeState.chaseDist * Math.cos(bikeState.camPitch);
-        const vertOffset = 1.25 + bikeState.chaseDist * Math.sin(bikeState.camPitch);
+        const vertOffset = 1.02 + bikeState.chaseDist * Math.sin(bikeState.camPitch);
         const idealCamX = freeState.x - camDirX * horizDist;
         const idealCamZ = freeState.z - camDirZ * horizDist;
         const camGround = terrain.getHeightAtXZ(idealCamX, idealCamZ);
-        const idealCamY = Math.max(camGround + 1.05, bikeY + vertOffset);
+        const idealCamY = Math.max(camGround + 0.92, bikeY + vertOffset);
 
         const camLerp = Math.min(1, dt * 11);
         bikeState.camPos.x += (idealCamX - bikeState.camPos.x) * camLerp;
         bikeState.camPos.y += (idealCamY - bikeState.camPos.y) * camLerp;
         bikeState.camPos.z += (idealCamZ - bikeState.camPos.z) * camLerp;
 
-        const idealLookX = freeState.x + travelDirX * 7.5;
-        const idealLookY = bikeY + 1.35 + gradePct * 0.05;
-        const idealLookZ = freeState.z + travelDirZ * 7.5;
+        const idealLookX = freeState.x + travelDirX * 5.2;
+        const idealLookY = bikeY + 1.15 + gradePct * 0.04;
+        const idealLookZ = freeState.z + travelDirZ * 5.2;
         bikeState.camLook.x += (idealLookX - bikeState.camLook.x) * Math.min(1, dt * 14);
         bikeState.camLook.y += (idealLookY - bikeState.camLook.y) * Math.min(1, dt * 14);
         bikeState.camLook.z += (idealLookZ - bikeState.camLook.z) * Math.min(1, dt * 14);
@@ -763,7 +848,7 @@ async function initApp(): Promise<void> {
         camera.position.copy(bikeState.camPos);
         camera.lookAt(bikeState.camLook);
 
-        const targetFov = isSkidding ? 64 : sprint && bikeState.speedMs > 9 ? 67 : 61;
+        const targetFov = isSkidding ? 64 : sprint && bikeState.speedMs > 9 ? 67 : 60;
         if (Math.abs(camera.fov - targetFov) > 0.05) {
           camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 6);
           camera.updateProjectionMatrix();
