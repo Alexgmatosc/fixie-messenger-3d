@@ -1,7 +1,21 @@
+export type RoofShape =
+  | 'flat'
+  | 'gabled'
+  | 'hipped'
+  | 'pyramidal'
+  | 'mansard'
+  | 'dome'
+  | 'round'
+  | 'skillion';
+
 export interface BuildingFeature {
   id: string;
   name?: string;
   height: number;
+  minHeight?: number;
+  roofShape?: RoofShape;
+  roofHeight?: number;
+  isPart?: boolean;
   rings: [number, number][][];
 }
 

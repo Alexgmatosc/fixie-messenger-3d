@@ -84,15 +84,15 @@ async function initApp(): Promise<void> {
   const isWebGPU = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend === true;
   statBackend.textContent = isWebGPU ? 'WebGPU' : 'WebGL2 (Fallback)';
 
-  // 3. Escena, cielo e iluminación natural de Madrid
+  // 3. Escena, cielo e iluminación natural estilo Apple Maps DCE
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(PALETTE.sky);
-  scene.fog = new THREE.FogExp2(PALETTE.fog, 0.00038);
+  scene.fog = new THREE.FogExp2(PALETTE.fog, 0.00028);
 
-  const hemiLight = new THREE.HemisphereLight(0xb8dcff, 0xcabca8, 1.05);
+  const hemiLight = new THREE.HemisphereLight(0xcce6ff, 0xd8d2c7, 1.25);
   scene.add(hemiLight);
 
-  const dirLight = new THREE.DirectionalLight(0xfff4e0, 2.0);
+  const dirLight = new THREE.DirectionalLight(0xfff7e8, 2.15);
   dirLight.position.set(280, 440, 220);
   dirLight.castShadow = true;
   dirLight.shadow.mapSize.set(1536, 1536);

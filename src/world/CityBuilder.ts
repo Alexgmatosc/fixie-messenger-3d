@@ -85,31 +85,41 @@ function parsePolygonRings(rings: [number, number][][]): {
 }
 
 /**
- * Prototipo de árbol ultra-ligero (~90 triángulos totales) en 1 sola geometría:
- * cilindro de 5 caras para el tronco (aIsCrown = 0) + 1 icosaedro subdividido nivel 1 para la copa (aIsCrown = 1).
+ * Prototipo de árbol estilo Apple Maps (~165 triángulos totales) en 1 sola geometría:
+ * tronco ligero de 5 caras (aIsCrown = 0) + copa orgánica de 2 lóbulos suavizados (aIsCrown = 1).
  */
 function createCombinedTreePrototype(): THREE.BufferGeometry {
-  const trunkRaw = new THREE.CylinderGeometry(0.14, 0.22, 1.85, 5, 1, false);
-  trunkRaw.translate(0, 0.925, 0);
+  const trunkRaw = new THREE.CylinderGeometry(0.14, 0.22, 1.75, 5, 1, false);
+  trunkRaw.translate(0, 0.875, 0);
   const trunk = trunkRaw.index ? trunkRaw.toNonIndexed() : trunkRaw;
   if (trunk !== trunkRaw) trunkRaw.dispose();
   trunk.deleteAttribute('uv');
   const trunkCount = trunk.getAttribute('position').count;
   trunk.setAttribute('aIsCrown', new THREE.Float32BufferAttribute(new Float32Array(trunkCount).fill(0), 1));
 
-  const crownRaw = new THREE.IcosahedronGeometry(1.55, 1);
-  crownRaw.scale(1.0, 0.84, 1.0);
-  crownRaw.translate(0, 3.05, 0);
-  const crown = crownRaw.index ? crownRaw.toNonIndexed() : crownRaw;
-  if (crown !== crownRaw) crownRaw.dispose();
-  crown.deleteAttribute('uv');
-  const crownCount = crown.getAttribute('position').count;
-  crown.setAttribute('aIsCrown', new THREE.Float32BufferAttribute(new Float32Array(crownCount).fill(1), 1));
+  const lobe1Raw = new THREE.IcosahedronGeometry(1.42, 1);
+  lobe1Raw.scale(1.05, 0.88, 1.05);
+  lobe1Raw.translate(-0.14, 2.88, 0.1);
+  const lobe1 = lobe1Raw.index ? lobe1Raw.toNonIndexed() : lobe1Raw;
+  if (lobe1 !== lobe1Raw) lobe1Raw.dispose();
+  lobe1.deleteAttribute('uv');
+  const lobe1Count = lobe1.getAttribute('position').count;
+  lobe1.setAttribute('aIsCrown', new THREE.Float32BufferAttribute(new Float32Array(lobe1Count).fill(1), 1));
 
-  const merged = mergeGeometries([trunk, crown], false);
+  const lobe2Raw = new THREE.IcosahedronGeometry(1.02, 1);
+  lobe2Raw.scale(1.0, 0.92, 1.0);
+  lobe2Raw.translate(0.46, 3.32, -0.28);
+  const lobe2 = lobe2Raw.index ? lobe2Raw.toNonIndexed() : lobe2Raw;
+  if (lobe2 !== lobe2Raw) lobe2Raw.dispose();
+  lobe2.deleteAttribute('uv');
+  const lobe2Count = lobe2.getAttribute('position').count;
+  lobe2.setAttribute('aIsCrown', new THREE.Float32BufferAttribute(new Float32Array(lobe2Count).fill(1), 1));
+
+  const merged = mergeGeometries([trunk, lobe1, lobe2], false);
   trunk.dispose();
-  crown.dispose();
-  if (!merged) return crown;
+  lobe1.dispose();
+  lobe2.dispose();
+  if (!merged) return lobe1;
   merged.computeVertexNormals();
   return merged;
 }
@@ -465,18 +475,216 @@ function buildRoadsMesh(
   return mesh;
 }
 
+interface BuildingEmitBuffers {
+  positions: number[];
+  normals: number[];
+  colors: number[];
+  localHeights: number[];
+  topDists: number[];
+  roofTypes: number[];
+}
+
+function pushBuildingTri(
+  buf: BuildingEmitBuffers,
+  ax: number, ay: number, az: number, alh: number, atd: number,
+  bx: number, by: number, bz: number, blh: number, btd: number,
+  cx: number, cy: number, cz: number, clh: number, ctd: number,
+  nx: number, ny: number, nz: number,
+  cr: number, cg: number, cb: number,
+  roofType: number
+): void {
+  buf.positions.push(ax, ay, az, bx, by, bz, cx, cy, cz);
+  buf.normals.push(nx, ny, nz, nx, ny, nz, nx, ny, nz);
+  buf.colors.push(cr, cg, cb, cr, cg, cb, cr, cg, cb);
+  buf.localHeights.push(alh, blh, clh);
+  buf.topDists.push(atd, btd, ctd);
+  buf.roofTypes.push(roofType, roofType, roofType);
+}
+
+function pushBuildingAutoTri(
+  buf: BuildingEmitBuffers,
+  ax: number, ay: number, az: number, alh: number, atd: number,
+  bx: number, by: number, bz: number, blh: number, btd: number,
+  cx: number, cy: number, cz: number, clh: number, ctd: number,
+  cr: number, cg: number, cb: number,
+  roofType: number
+): void {
+  const ux = bx - ax;
+  const uy = by - ay;
+  const uz = bz - az;
+  const vx = cx - ax;
+  const vy = cy - ay;
+  const vz = cz - az;
+  let nx = uy * vz - uz * vy;
+  let ny = uz * vx - ux * vz;
+  let nz = ux * vy - uy * vx;
+  const len = Math.hypot(nx, ny, nz) || 1;
+  nx /= len;
+  ny /= len;
+  nz /= len;
+  pushBuildingTri(
+    buf,
+    ax, ay, az, alh, atd,
+    bx, by, bz, blh, btd,
+    cx, cy, cz, clh, ctd,
+    nx, ny, nz,
+    cr, cg, cb,
+    roofType
+  );
+}
+
+function pushWallQuad(
+  buf: BuildingEmitBuffers,
+  x0: number, z0: number,
+  x1: number, z1: number,
+  botY: number, topY: number,
+  botLH: number, topLH: number,
+  botTD: number, topTD: number,
+  cr: number, cg: number, cb: number,
+  roofType: number
+): void {
+  const dx = x1 - x0;
+  const dz = z1 - z0;
+  const len = Math.hypot(dx, dz);
+  if (len < 1e-4) return;
+  const nx = -dz / len;
+  const nz = dx / len;
+
+  pushBuildingTri(
+    buf,
+    x0, botY, z0, botLH, botTD,
+    x1, botY, z1, botLH, botTD,
+    x1, topY, z1, topLH, topTD,
+    nx, 0, nz,
+    cr, cg, cb,
+    roofType
+  );
+  pushBuildingTri(
+    buf,
+    x0, botY, z0, botLH, botTD,
+    x1, topY, z1, topLH, topTD,
+    x0, topY, z0, topLH, topTD,
+    nx, 0, nz,
+    cr, cg, cb,
+    roofType
+  );
+}
+
+function pointInVec2Ring(x: number, y: number, ring: THREE.Vector2[]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i].x;
+    const yi = ring[i].y;
+    const xj = ring[j].x;
+    const yj = ring[j].y;
+    const intersect = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi + 1e-12) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function pointInParsedShapeXZ(
+  x: number,
+  z: number,
+  outer: THREE.Vector2[],
+  holes: THREE.Vector2[][]
+): boolean {
+  const y2 = -z;
+  if (!pointInVec2Ring(x, y2, outer)) return false;
+  for (const h of holes) {
+    if (pointInVec2Ring(x, y2, h)) return false;
+  }
+  return true;
+}
+
+function computeStarMinApothem(outer: THREE.Vector2[], cx2: number, cy2: number): number {
+  let minApothem = Infinity;
+  const n = outer.length;
+  for (let i = 0; i < n; i++) {
+    const p0 = outer[i];
+    const p1 = outer[(i + 1) % n];
+    const edgeLen = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+    if (edgeLen < 1e-4) continue;
+    const cross = (p0.x - cx2) * (p1.y - cy2) - (p0.y - cy2) * (p1.x - cx2);
+    const apothem = cross / edgeLen;
+    if (apothem < minApothem) minApothem = apothem;
+  }
+  return minApothem;
+}
+
+function emitOrientedRooftopBox(
+  buf: BuildingEmitBuffers,
+  cx: number,
+  cz: number,
+  ux: number,
+  uz: number,
+  hu: number,
+  hv: number,
+  deckY: number,
+  boxH: number,
+  deckLocalH: number,
+  outer: THREE.Vector2[],
+  holes: THREE.Vector2[][],
+  cr: number,
+  cg: number,
+  cb: number
+): void {
+  const vx = -uz;
+  const vz = ux;
+  const margin = 0.85;
+  const corners: [number, number][] = [
+    [cx - ux * hu + vx * hv, cz - uz * hu + vz * hv],
+    [cx + ux * hu + vx * hv, cz + uz * hu + vz * hv],
+    [cx + ux * hu - vx * hv, cz + uz * hu - vz * hv],
+    [cx - ux * hu - vx * hv, cz - uz * hu - vz * hv],
+  ];
+  for (const [kx, kz] of corners) {
+    const mx = cx + (kx - cx) * ((Math.max(hu, hv) + margin) / Math.max(hu, hv));
+    const mz = cz + (kz - cz) * ((Math.max(hu, hv) + margin) / Math.max(hu, hv));
+    if (!pointInParsedShapeXZ(mx, mz, outer, holes)) return;
+  }
+
+  const topY = deckY + boxH;
+  const topLH = deckLocalH + boxH;
+  for (let i = 0; i < 4; i++) {
+    const p0 = corners[i];
+    const p1 = corners[(i + 1) % 4];
+    pushWallQuad(buf, p0[0], p0[1], p1[0], p1[1], deckY, topY, deckLocalH, topLH, boxH, 0, cr, cg, cb, 3);
+  }
+  pushBuildingTri(
+    buf,
+    corners[0][0], topY, corners[0][1], topLH, 5,
+    corners[1][0], topY, corners[1][1], topLH, 5,
+    corners[2][0], topY, corners[2][1], topLH, 5,
+    0, 1, 0, cr, cg, cb, 3
+  );
+  pushBuildingTri(
+    buf,
+    corners[0][0], topY, corners[0][1], topLH, 5,
+    corners[2][0], topY, corners[2][1], topLH, 5,
+    corners[3][0], topY, corners[3][1], topLH, 5,
+    0, 1, 0, cr, cg, cb, 3
+  );
+}
+
 /**
- * Extrusor directo de edificios adaptado al relieve real con faldón de cimentación enterrado.
+ * Extrusor arquitectónico estilo Apple Maps DCE:
+ * - Soporta `building:part`, `minHeight`, tejados reales OSM (`pyramidal`, `dome`, `mansard`,
+ *   `hipped`, `gabled`, `skillion`) y azoteas con peto perimetral + casetones procedurales.
  */
 function buildBuildingsMesh(
   buildings: ChunkPayload['buildings'],
   material: THREE.Material,
   terrain: TerrainElevation
 ): THREE.Mesh | null {
-  const positions: number[] = [];
-  const normals: number[] = [];
-  const colors: number[] = [];
-  const localHeights: number[] = [];
+  const buf: BuildingEmitBuffers = {
+    positions: [],
+    normals: [],
+    colors: [],
+    localHeights: [],
+    topDists: [],
+    roofTypes: [],
+  };
   const tempColor = new THREE.Color();
 
   for (const b of buildings) {
@@ -492,15 +700,35 @@ function buildBuildingsMesh(
 
     let sumBaseY = 0;
     let minRingY = Infinity;
+    let sumX = 0;
+    let sumY2 = 0;
     for (const pt of parsed.outer) {
       const py = terrain.getHeightAtXZ(pt.x, -pt.y);
       sumBaseY += py;
       if (py < minRingY) minRingY = py;
+      sumX += pt.x;
+      sumY2 += pt.y;
     }
     const baseY = sumBaseY / parsed.outer.length;
-    const h = b.height;
-    const roofY = baseY + h;
-    const botY = Math.min(baseY, minRingY) - 3.0;
+    const cx2 = sumX / parsed.outer.length;
+    const cy2 = sumY2 / parsed.outer.length;
+    const cx = cx2;
+    const cz = -cy2;
+
+    const minH = b.minHeight ?? 0;
+    const totalH = b.height;
+    const roofShape = b.roofShape;
+    const hasCustomRoof = Boolean(roofShape && roofShape !== 'flat');
+    const roofH = hasCustomRoof
+      ? Math.min(Math.max(1.2, totalH - minH - 1.5), Math.max(1.2, b.roofHeight ?? 3.5))
+      : 0;
+    const wallTopLocal = hasCustomRoof ? Math.max(minH + 1.8, totalH - roofH) : totalH;
+    const wallSpan = Math.max(1.0, wallTopLocal - minH);
+
+    const botY = minH > 0.2 ? baseY + minH : Math.min(baseY, minRingY) - 3.0;
+    const wallTopY = baseY + wallTopLocal;
+    const peakY = wallTopY + roofH;
+    const botLH = minH > 0.2 ? minH : 0;
 
     const hVal = hashString(b.id);
     const toneHex = PALETTE.buildingTones[Math.floor(hVal * PALETTE.buildingTones.length)];
@@ -510,74 +738,320 @@ function buildBuildingsMesh(
     const cg = tempColor.g * shade;
     const cb = tempColor.b * shade;
 
-    // 1. Tejado superior (y = baseY + h, normal = +Y)
     const allPts: THREE.Vector2[] = [...parsed.outer];
     for (const hole of parsed.holes) {
       for (const pt of hole) allPts.push(pt);
     }
 
-    for (let t = 0; t < roofTris.length; t++) {
-      const [ia, ib, ic] = roofTris[t];
-      const a = allPts[ia];
-      const bPt = allPts[ib];
-      const c = allPts[ic];
-      if (!a || !bPt || !c) continue;
-
-      positions.push(
-        a.x, roofY, -a.y,
-        bPt.x, roofY, -bPt.y,
-        c.x, roofY, -c.y
-      );
-      normals.push(0, 1, 0, 0, 1, 0, 0, 1, 0);
-      colors.push(cr, cg, cb, cr, cg, cb, cr, cg, cb);
-      localHeights.push(h, h, h);
-    }
-
-    // 2. Muros verticales (anillo exterior CCW + huecos interiores CW) con cimentación en pendiente
+    // 1. Muros verticales (anillo exterior CCW + huecos interiores CW)
     const rings = [parsed.outer, ...parsed.holes];
     for (const ring of rings) {
       const n = ring.length;
       for (let i = 0; i < n; i++) {
         const p0 = ring[i];
         const p1 = ring[(i + 1) % n];
-
-        const x0 = p0.x;
-        const z0 = -p0.y;
-        const x1 = p1.x;
-        const z1 = -p1.y;
-
-        const dx = x1 - x0;
-        const dz = z1 - z0;
-        const len = Math.hypot(dx, dz);
-        if (len < 1e-4) continue;
-
-        const nx = -dz / len;
-        const nz = dx / len;
-
-        positions.push(
-          x0, botY, z0,
-          x1, botY, z1,
-          x1, roofY, z1,
-          x0, botY, z0,
-          x1, roofY, z1,
-          x0, roofY, z0
+        pushWallQuad(
+          buf,
+          p0.x, -p0.y,
+          p1.x, -p1.y,
+          botY, wallTopY,
+          botLH, wallTopLocal,
+          wallSpan, 0,
+          cr, cg, cb,
+          0
         );
-        for (let k = 0; k < 6; k++) {
-          normals.push(nx, 0, nz);
-          colors.push(cr, cg, cb);
+      }
+    }
+
+    // Tapa inferior solo cuando el bloque vuela (minHeight > 0.2 m, p. ej. arcos o voladizos)
+    if (minH > 0.2) {
+      for (let t = 0; t < roofTris.length; t++) {
+        const [ia, ib, ic] = roofTris[t];
+        const a = allPts[ia];
+        const bPt = allPts[ib];
+        const c = allPts[ic];
+        if (!a || !bPt || !c) continue;
+        pushBuildingTri(
+          buf,
+          a.x, botY, -a.y, botLH, wallSpan,
+          c.x, botY, -c.y, botLH, wallSpan,
+          bPt.x, botY, -bPt.y, botLH, wallSpan,
+          0, -1, 0, cr, cg, cb, 0
+        );
+      }
+    }
+
+    const area = Math.abs(signedArea2D(parsed.outer));
+    const minApothem = parsed.holes.length === 0 ? computeStarMinApothem(parsed.outer, cx2, cy2) : -1;
+    const isStarShaped = minApothem > 1.8 && pointInParsedShapeXZ(cx, cz, parsed.outer, parsed.holes);
+
+    const emitFlatTriangles = (pts2d: THREE.Vector2[], tris: number[][], yLvl: number, lh: number, rType: number) => {
+      for (let t = 0; t < tris.length; t++) {
+        const [ia, ib, ic] = tris[t];
+        const a = pts2d[ia];
+        const bPt = pts2d[ib];
+        const c = pts2d[ic];
+        if (!a || !bPt || !c) continue;
+        pushBuildingTri(
+          buf,
+          a.x, yLvl, -a.y, lh, 5,
+          bPt.x, yLvl, -bPt.y, lh, 5,
+          c.x, yLvl, -c.y, lh, 5,
+          0, 1, 0, cr, cg, cb, rType
+        );
+      }
+    };
+
+    const emitStarInsetRoof = (insetScale: number, rTypeSlope: number, rTypeCap: number, withCap: boolean) => {
+      const n = parsed.outer.length;
+      const innerPts: THREE.Vector2[] = [];
+      for (let i = 0; i < n; i++) {
+        const p = parsed.outer[i];
+        innerPts.push(new THREE.Vector2(cx2 + (p.x - cx2) * insetScale, cy2 + (p.y - cy2) * insetScale));
+      }
+      for (let i = 0; i < n; i++) {
+        const j = (i + 1) % n;
+        const p0 = parsed.outer[i];
+        const p1 = parsed.outer[j];
+        const q0 = innerPts[i];
+        const q1 = innerPts[j];
+        pushBuildingAutoTri(
+          buf,
+          p0.x, wallTopY, -p0.y, wallTopLocal, 5,
+          p1.x, wallTopY, -p1.y, wallTopLocal, 5,
+          q1.x, peakY, -q1.y, wallTopLocal + roofH, 5,
+          cr, cg, cb, rTypeSlope
+        );
+        pushBuildingAutoTri(
+          buf,
+          p0.x, wallTopY, -p0.y, wallTopLocal, 5,
+          q1.x, peakY, -q1.y, wallTopLocal + roofH, 5,
+          q0.x, peakY, -q0.y, wallTopLocal + roofH, 5,
+          cr, cg, cb, rTypeSlope
+        );
+      }
+      if (withCap) {
+        try {
+          const capTris = THREE.ShapeUtils.triangulateShape(innerPts, []);
+          emitFlatTriangles(innerPts, capTris, peakY, wallTopLocal + roofH, rTypeCap);
+        } catch {
+          // Ignorar si polígono degenera al encoger
         }
-        localHeights.push(0, 0, h, 0, h, h);
+      }
+    };
+
+    // 2. Cubierta real OSM o detalles procedurales Apple Maps
+    if ((roofShape === 'pyramidal' || roofShape === 'round') && isStarShaped) {
+      const n = parsed.outer.length;
+      for (let i = 0; i < n; i++) {
+        const p0 = parsed.outer[i];
+        const p1 = parsed.outer[(i + 1) % n];
+        pushBuildingAutoTri(
+          buf,
+          p0.x, wallTopY, -p0.y, wallTopLocal, 5,
+          p1.x, wallTopY, -p1.y, wallTopLocal, 5,
+          cx, peakY, cz, wallTopLocal + roofH, 5,
+          cr, cg, cb, 2
+        );
+      }
+    } else if (roofShape === 'dome' && isStarShaped) {
+      const ringsR = [1.0, 0.72, 0.38];
+      const ringsH = [0.0, 0.58, 0.90];
+      const n = parsed.outer.length;
+      const scaleRing = (rFrac: number, hFrac: number) => ({
+        y: wallTopY + roofH * hFrac,
+        lh: wallTopLocal + roofH * hFrac,
+        pts: parsed.outer.map((p) => [cx + (p.x - cx) * rFrac, cz + (-p.y - cz) * rFrac] as [number, number]),
+      });
+      const r0 = scaleRing(ringsR[0], ringsH[0]);
+      const r1 = scaleRing(ringsR[1], ringsH[1]);
+      const r2 = scaleRing(ringsR[2], ringsH[2]);
+      const pairs: [typeof r0, typeof r1][] = [[r0, r1], [r1, r2]];
+      for (const [lo, hi] of pairs) {
+        for (let i = 0; i < n; i++) {
+          const j = (i + 1) % n;
+          pushBuildingAutoTri(
+            buf,
+            lo.pts[i][0], lo.y, lo.pts[i][1], lo.lh, 5,
+            lo.pts[j][0], lo.y, lo.pts[j][1], lo.lh, 5,
+            hi.pts[j][0], hi.y, hi.pts[j][1], hi.lh, 5,
+            cr, cg, cb, 2
+          );
+          pushBuildingAutoTri(
+            buf,
+            lo.pts[i][0], lo.y, lo.pts[i][1], lo.lh, 5,
+            hi.pts[j][0], hi.y, hi.pts[j][1], hi.lh, 5,
+            hi.pts[i][0], hi.y, hi.pts[i][1], hi.lh, 5,
+            cr, cg, cb, 2
+          );
+        }
+      }
+      for (let i = 0; i < n; i++) {
+        const j = (i + 1) % n;
+        pushBuildingAutoTri(
+          buf,
+          r2.pts[i][0], r2.y, r2.pts[i][1], r2.lh, 5,
+          r2.pts[j][0], r2.y, r2.pts[j][1], r2.lh, 5,
+          cx, peakY, cz, wallTopLocal + roofH, 5,
+          cr, cg, cb, 2
+        );
+      }
+    } else if (roofShape === 'mansard' && isStarShaped) {
+      const insetScale = 1 - Math.min(0.32, 2.1 / minApothem);
+      emitStarInsetRoof(insetScale, 2, 1, true);
+    } else if (roofShape === 'gabled' && parsed.outer.length === 4 && parsed.holes.length === 0) {
+      const q = parsed.outer;
+      const d01 = Math.hypot(q[1].x - q[0].x, q[1].y - q[0].y);
+      const d12 = Math.hypot(q[2].x - q[1].x, q[2].y - q[1].y);
+      const i0 = d01 <= d12 ? 0 : 1;
+      const a0 = q[i0];
+      const a1 = q[(i0 + 1) % 4];
+      const b0 = q[(i0 + 2) % 4];
+      const b1 = q[(i0 + 3) % 4];
+      const ra: [number, number] = [(a0.x + a1.x) * 0.5, -(a0.y + a1.y) * 0.5];
+      const rb: [number, number] = [(b0.x + b1.x) * 0.5, -(b0.y + b1.y) * 0.5];
+      const peakLH = wallTopLocal + roofH;
+
+      // 2 vertientes inclinadas
+      pushBuildingAutoTri(buf, a1.x, wallTopY, -a1.y, wallTopLocal, 5, b0.x, wallTopY, -b0.y, wallTopLocal, 5, rb[0], peakY, rb[1], peakLH, 5, cr, cg, cb, 2);
+      pushBuildingAutoTri(buf, a1.x, wallTopY, -a1.y, wallTopLocal, 5, rb[0], peakY, rb[1], peakLH, 5, ra[0], peakY, ra[1], peakLH, 5, cr, cg, cb, 2);
+      pushBuildingAutoTri(buf, b1.x, wallTopY, -b1.y, wallTopLocal, 5, a0.x, wallTopY, -a0.y, wallTopLocal, 5, ra[0], peakY, ra[1], peakLH, 5, cr, cg, cb, 2);
+      pushBuildingAutoTri(buf, b1.x, wallTopY, -b1.y, wallTopLocal, 5, ra[0], peakY, ra[1], peakLH, 5, rb[0], peakY, rb[1], peakLH, 5, cr, cg, cb, 2);
+
+      // 2 piñones triangulares de fachada
+      pushBuildingAutoTri(buf, a0.x, wallTopY, -a0.y, wallTopLocal, wallSpan * 0.2, a1.x, wallTopY, -a1.y, wallTopLocal, wallSpan * 0.2, ra[0], peakY, ra[1], peakLH, 0, cr, cg, cb, 0);
+      pushBuildingAutoTri(buf, b0.x, wallTopY, -b0.y, wallTopLocal, wallSpan * 0.2, b1.x, wallTopY, -b1.y, wallTopLocal, wallSpan * 0.2, rb[0], peakY, rb[1], peakLH, 0, cr, cg, cb, 0);
+    } else if ((roofShape === 'hipped' || roofShape === 'gabled') && isStarShaped) {
+      emitStarInsetRoof(0.42, 2, 2, true);
+    } else {
+      // Azotea plana: añadir peto perimetral si es polígono estrellado limpio (<= 10 vértices)
+      let deckY = wallTopY;
+      let deckLH = wallTopLocal;
+      const canParapet = isStarShaped && parsed.outer.length <= 10 && area >= 70 && wallTopLocal >= 6.0;
+      if (canParapet) {
+        const rimH = 0.45;
+        const rimTopY = wallTopY + rimH;
+        const recessY = wallTopY - 0.10;
+        const scale = 1 - Math.min(0.16, 0.72 / minApothem);
+        const innerPts = parsed.outer.map(
+          (p) => new THREE.Vector2(cx2 + (p.x - cx2) * scale, cy2 + (p.y - cy2) * scale)
+        );
+        const n = parsed.outer.length;
+        for (let i = 0; i < n; i++) {
+          const j = (i + 1) % n;
+          const p0 = parsed.outer[i];
+          const p1 = parsed.outer[j];
+          const q0 = innerPts[i];
+          const q1 = innerPts[j];
+          // Cara exterior del peto
+          pushWallQuad(buf, p0.x, -p0.y, p1.x, -p1.y, wallTopY, rimTopY, wallTopLocal, wallTopLocal + rimH, rimH, 0, cr, cg, cb, 3);
+          // Coronación horizontal del peto
+          pushBuildingTri(
+            buf,
+            p0.x, rimTopY, -p0.y, wallTopLocal + rimH, 5,
+            p1.x, rimTopY, -p1.y, wallTopLocal + rimH, 5,
+            q1.x, rimTopY, -q1.y, wallTopLocal + rimH, 5,
+            0, 1, 0, cr, cg, cb, 3
+          );
+          pushBuildingTri(
+            buf,
+            p0.x, rimTopY, -p0.y, wallTopLocal + rimH, 5,
+            q1.x, rimTopY, -q1.y, wallTopLocal + rimH, 5,
+            q0.x, rimTopY, -q0.y, wallTopLocal + rimH, 5,
+            0, 1, 0, cr, cg, cb, 3
+          );
+          // Cara interior del peto hacia la azotea rebajada (winding invertido q1 -> q0)
+          pushWallQuad(buf, q1.x, -q1.y, q0.x, -q0.y, recessY, rimTopY, wallTopLocal - 0.1, wallTopLocal + rimH, rimH + 0.1, 0, cr, cg, cb, 0);
+        }
+        try {
+          const innerTris = THREE.ShapeUtils.triangulateShape(innerPts, []);
+          emitFlatTriangles(innerPts, innerTris, recessY, wallTopLocal - 0.1, 1);
+          deckY = recessY;
+          deckLH = wallTopLocal - 0.1;
+        } catch {
+          emitFlatTriangles(allPts, roofTris, wallTopY, wallTopLocal, 1);
+        }
+      } else {
+        emitFlatTriangles(allPts, roofTris, wallTopY, wallTopLocal, 1);
+      }
+
+      // Casetones / lucernarios procedurales en azoteas medianas y grandes
+      if (area >= 95 && wallTopLocal >= 7.0) {
+        let bestLenSq = 0;
+        let ux = 1;
+        let uz = 0;
+        for (let i = 0; i < parsed.outer.length; i++) {
+          const p0 = parsed.outer[i];
+          const p1 = parsed.outer[(i + 1) % parsed.outer.length];
+          const dx = p1.x - p0.x;
+          const dz = -(p1.y - p0.y);
+          const lSq = dx * dx + dz * dz;
+          if (lSq > bestLenSq) {
+            bestLenSq = lSq;
+            const len = Math.sqrt(lSq) || 1;
+            ux = dx / len;
+            uz = dz / len;
+          }
+        }
+        const vx = -uz;
+        const vz = ux;
+        let minU = Infinity;
+        let maxU = -Infinity;
+        let minV = Infinity;
+        let maxV = -Infinity;
+        for (const p of parsed.outer) {
+          const px = p.x - cx;
+          const pz = -p.y - cz;
+          const u = px * ux + pz * uz;
+          const v = px * vx + pz * vz;
+          if (u < minU) minU = u;
+          if (u > maxU) maxU = u;
+          if (v < minV) minV = v;
+          if (v > maxV) maxV = v;
+        }
+        const spanU = maxU - minU;
+        const spanV = maxV - minV;
+        if (spanU >= 8 && spanV >= 7) {
+          const r1 = hashString(b.id + '_c1');
+          const r2 = hashString(b.id + '_c2');
+          const offU = (r1 - 0.5) * Math.min(4.5, spanU * 0.22);
+          const offV = (r2 - 0.5) * Math.min(4.0, spanV * 0.22);
+          const hu = Math.min(2.6, Math.max(1.4, spanU * 0.12));
+          const hv = Math.min(2.2, Math.max(1.2, spanV * 0.13));
+          const casH = 1.9 + r1 * 1.1;
+          emitOrientedRooftopBox(
+            buf,
+            cx + ux * offU + vx * offV,
+            cz + uz * offU + vz * offV,
+            ux, uz, hu, hv, deckY, casH, deckLH,
+            parsed.outer, parsed.holes, cr, cg, cb
+          );
+          if (area >= 280) {
+            const offU2 = -offU + (r2 - 0.5) * 2.5;
+            const offV2 = -offV * 0.5;
+            emitOrientedRooftopBox(
+              buf,
+              cx + ux * offU2 + vx * offV2,
+              cz + uz * offU2 + vz * offV2,
+              ux, uz, Math.min(2.0, hu * 0.85), Math.min(1.5, hv * 0.78),
+              deckY, 0.95 + r2 * 0.55, deckLH,
+              parsed.outer, parsed.holes, cr, cg, cb
+            );
+          }
+        }
       }
     }
   }
 
-  if (positions.length === 0) return null;
+  if (buf.positions.length === 0) return null;
 
   const geom = new THREE.BufferGeometry();
-  geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geom.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-  geom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  geom.setAttribute('aLocalHeight', new THREE.Float32BufferAttribute(localHeights, 1));
+  geom.setAttribute('position', new THREE.Float32BufferAttribute(buf.positions, 3));
+  geom.setAttribute('normal', new THREE.Float32BufferAttribute(buf.normals, 3));
+  geom.setAttribute('color', new THREE.Float32BufferAttribute(buf.colors, 3));
+  geom.setAttribute('aLocalHeight', new THREE.Float32BufferAttribute(buf.localHeights, 1));
+  geom.setAttribute('aTopDist', new THREE.Float32BufferAttribute(buf.topDists, 1));
+  geom.setAttribute('aRoofType', new THREE.Float32BufferAttribute(buf.roofTypes, 1));
 
   const mesh = new THREE.Mesh(geom, material);
   mesh.name = 'chunk-buildings';

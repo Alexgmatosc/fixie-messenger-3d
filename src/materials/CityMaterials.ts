@@ -17,59 +17,66 @@ import {
 } from 'three/tsl';
 
 export const PALETTE = {
-  sky: 0x9bc4ec,
-  fog: 0xcfe3f7,
-  ground: 0xd5cfc6,
-  asphalt: 0x333842,
-  roadMarking: 0xf1f5f9,
+  sky: 0xa9cef2,
+  fog: 0xd9e7f5,
+  ground: 0xe2dfd8,
+  asphalt: 0x4e545e,
+  roadMarking: 0xf4f6f8,
   buildingTones: [
-    0xece5d8, // blanco roto / piedra caliza
-    0xe2d4be, // crema / arena suave
-    0xdcc19e, // ocre cálido madrileño
-    0xd6a994, // terracota pastel
-    0xcfd5da, // gris piedra claro
-    0xe6d8c8, // marfil cálido
+    0xf0ede6, // alabastro luminoso (Cibeles / Banco de España)
+    0xe9e1d2, // crema piedra suave
+    0xe2d5c1, // arena cálida pastel
+    0xdce1e8, // gris azulado pálido
+    0xebe5da, // marfil luminoso
+    0xe6d4c5, // melocotón piedra sutil
   ] as const,
-  roofClay: 0xb8846d,
-  parkGrass: 0x5d9456,
-  treeCrowns: [0x467f43, 0x55914f, 0x67a359, 0x73a857] as const,
-  treeTrunk: 0x6b4f3b,
-  water: 0x2b7cd3,
+  roofFlat: 0xe5e1d9,
+  roofSloped: 0x9aa4b2,
+  parkGrass: 0x7cc466,
+  treeCrowns: [0x76b85c, 0x87c56b, 0x97d079, 0x6ba955] as const,
+  treeTrunk: 0x87725e,
+  water: 0x4998e6,
 };
 
 export function createGroundMaterial(): THREE.MeshStandardNodeMaterial {
   const mat = new THREE.MeshStandardNodeMaterial({
     roughness: 0.94,
-    metalness: 0.04,
+    metalness: 0.02,
   });
 
   const elevFactor = smoothstep(float(-45.0), float(48.0), positionWorld.y);
-  const valleyTone = color(0xc6bfb4);
-  const ridgeTone = color(0xe0d8cc);
+  const valleyTone = color(0xd6d2ca);
+  const ridgeTone = color(0xe9e6df);
   const baseHypso = mix(valleyTone, ridgeTone, elevFactor);
-  const heightTone = mix(color(PALETTE.ground), baseHypso, float(0.75));
-  const slopeShade = mix(float(0.86), float(1.0), smoothstep(float(0.86), float(0.995), normalWorld.y));
+  const heightTone = mix(color(PALETTE.ground), baseHypso, float(0.65));
+  const slopeShade = mix(float(0.90), float(1.0), smoothstep(float(0.86), float(0.995), normalWorld.y));
 
   mat.colorNode = heightTone.mul(slopeShade);
   return mat;
 }
 
 export function createParkMaterial(): THREE.MeshStandardNodeMaterial {
-  return new THREE.MeshStandardNodeMaterial({
-    color: PALETTE.parkGrass,
+  const mat = new THREE.MeshStandardNodeMaterial({
     roughness: 0.92,
     metalness: 0.02,
     polygonOffset: true,
     polygonOffsetFactor: -1,
     polygonOffsetUnits: -1,
   });
+
+  const wave = sin(positionWorld.x.mul(0.035))
+    .mul(sin(positionWorld.z.mul(0.042)))
+    .mul(0.5)
+    .add(0.5);
+  mat.colorNode = mix(color(0x74bd5e), color(0x88ce6f), wave);
+  return mat;
 }
 
 export function createWaterMaterial(): THREE.MeshStandardNodeMaterial {
   return new THREE.MeshStandardNodeMaterial({
     color: PALETTE.water,
-    roughness: 0.14,
-    metalness: 0.15,
+    roughness: 0.16,
+    metalness: 0.12,
     polygonOffset: true,
     polygonOffsetFactor: -4,
     polygonOffsetUnits: -4,
@@ -77,26 +84,44 @@ export function createWaterMaterial(): THREE.MeshStandardNodeMaterial {
 }
 
 /**
- * Material de edificios estilo Apple Maps DCE:
- * - Usa color por vértice para variación tonal entre bloques.
- * - Evalúa AO de contacto con el suelo en TSL mediante `aLocalHeight` (0..h en metros),
- *   evitando que la interpolación de vértice estire la sombra en edificios altos.
- * - Diferencia sutilmente los tejados respecto a las fachadas con `normalWorld.y`.
+ * Material arquitectónico estilo Apple Maps DCE:
+ * - Usa `aLocalHeight` para AO de contacto con el suelo/acera.
+ * - Usa `aTopDist` (distancia desde cornisa) para sombra bajo cornisa + filo luminoso superior.
+ * - Usa `aRoofType` (0 = fachada, 1 = azotea plana, 2 = tejado inclinado/cúpula, 3 = peto/casetón)
+ *   para diferenciar cubiertas, petos y volúmenes sin coste de draw calls.
  */
 export function createBuildingMaterial(): THREE.MeshStandardNodeMaterial {
   const mat = new THREE.MeshStandardNodeMaterial({
-    roughness: 0.88,
-    metalness: 0.03,
+    roughness: 0.89,
+    metalness: 0.02,
   });
 
   const baseTone = vertexColor();
   const localHeight = attribute('aLocalHeight', 'float');
-  const groundAo = mix(float(0.76), float(1.0), smoothstep(float(0.0), float(4.2), localHeight));
-  const roofMask = smoothstep(float(0.55), float(0.9), normalWorld.y);
-  const roofTone = mix(baseTone.mul(0.92), color(PALETTE.roofClay), float(0.58));
-  const finalColor = mix(baseTone, roofTone, roofMask);
+  const topDist = attribute('aTopDist', 'float');
+  const roofType = attribute('aRoofType', 'float');
 
-  mat.colorNode = finalColor.mul(groundAo);
+  const isWall = float(1.0).sub(step(float(0.5), roofType));
+  const isFlatRoof = step(float(0.5), roofType).mul(float(1.0).sub(step(float(1.5), roofType)));
+  const isSlopedRoof = step(float(1.5), roofType).mul(float(1.0).sub(step(float(2.5), roofType)));
+  const isTrim = step(float(2.5), roofType);
+
+  const groundAo = mix(float(0.80), float(1.0), smoothstep(float(0.0), float(4.0), localHeight));
+  const underCorniceAo = mix(float(0.91), float(1.0), smoothstep(float(0.35), float(2.2), topDist));
+  const corniceLip = smoothstep(float(0.45), float(0.0), topDist).mul(0.045);
+  const floorBands = sin(localHeight.mul(1.85)).mul(0.011).add(0.989);
+
+  const wallShade = mix(float(1.0), underCorniceAo.mul(floorBands).add(corniceLip), isWall);
+
+  const flatTone = mix(baseTone.mul(0.96), color(PALETTE.roofFlat), float(0.55));
+  const slopedTone = mix(baseTone.mul(0.90), color(PALETTE.roofSloped), float(0.62));
+  const trimTone = mix(baseTone, color(0xf4f1eb), float(0.52));
+
+  let surfaceColor = mix(baseTone, flatTone, isFlatRoof);
+  surfaceColor = mix(surfaceColor, slopedTone, isSlopedRoof);
+  surfaceColor = mix(surfaceColor, trimTone, isTrim);
+
+  mat.colorNode = surfaceColor.mul(groundAo).mul(wallShade);
   return mat;
 }
 
@@ -176,9 +201,9 @@ export function createTreeMaterial(): THREE.MeshStandardNodeMaterial {
     tintFactor
   );
   const verticalShade = mix(
-    float(0.78),
-    float(1.12),
-    smoothstep(float(1.8), float(4.3), positionGeometry.y)
+    float(0.86),
+    float(1.08),
+    smoothstep(float(1.8), float(4.6), positionGeometry.y)
   );
   const topHighlight = mix(
     float(0.94),

@@ -69,23 +69,104 @@ function deterministicHash(id) {
 }
 
 function parseNumericMeters(raw) {
-  if (!raw) return null;
-  const match = String(raw).trim().match(/^(\d+(?:[.,]\d+)?)/);
+  if (raw === undefined || raw === null) return null;
+  const match = String(raw).trim().match(/^(-?\d+(?:[.,]\d+)?)/);
   if (!match) return null;
   const val = parseFloat(match[1].replace(',', '.'));
-  return Number.isFinite(val) && val > 0 ? val : null;
+  return Number.isFinite(val) && val >= 0 ? val : null;
 }
 
-function computeBuildingHeight(id, tags) {
-  const explicitHeight = parseNumericMeters(tags.height);
-  if (explicitHeight !== null) {
-    return Math.min(110, Math.max(3.5, explicitHeight));
+function normalizeRoofShape(raw) {
+  if (!raw) return undefined;
+  const s = String(raw).trim().toLowerCase();
+  if (s === 'flat') return 'flat';
+  if (s === 'gabled') return 'gabled';
+  if (s === 'hipped' || s === 'half-hipped' || s === 'saltbox') return 'hipped';
+  if (s === 'pyramidal' || s === 'cone') return 'pyramidal';
+  if (s === 'mansard') return 'mansard';
+  if (s === 'dome' || s === 'onion') return 'dome';
+  if (s === 'round') return 'round';
+  if (s === 'skillion') return 'skillion';
+  return undefined;
+}
+
+function ringAreaMetersSq(ring) {
+  let area = 0;
+  const len =
+    ring.length > 1 && ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1]
+      ? ring.length - 1
+      : ring.length;
+  for (let i = 0, j = len - 1; i < len; j = i++) {
+    const [xi, zi] = projectToMeters(ring[i][0], ring[i][1]);
+    const [xj, zj] = projectToMeters(ring[j][0], ring[j][1]);
+    area += (xj + xi) * (zj - zi);
   }
+  return Math.abs(area * 0.5);
+}
+
+function pointInRingXZMeters(x, z, ptsXZ) {
+  let inside = false;
+  for (let i = 0, j = ptsXZ.length - 1; i < ptsXZ.length; j = i++) {
+    const xi = ptsXZ[i][0];
+    const zi = ptsXZ[i][1];
+    const xj = ptsXZ[j][0];
+    const zj = ptsXZ[j][1];
+    const intersect = zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi + 1e-12) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function computeBuildingProps(id, tags, isPart, outerRing) {
+  const explicitMinH = parseNumericMeters(tags.min_height);
+  const minLevels = parseNumericMeters(tags['building:min_level']);
+  const minHeight =
+    explicitMinH !== null
+      ? Math.min(80, explicitMinH)
+      : minLevels !== null
+        ? Math.min(80, minLevels * 3.4)
+        : 0;
+
+  const explicitH = parseNumericMeters(tags.height);
   const levels = parseNumericMeters(tags['building:levels']);
-  if (levels !== null) {
-    return Math.min(110, Math.max(3.5, levels * 3.5));
+  const roofLevels = parseNumericMeters(tags['roof:levels']);
+  let height;
+  if (explicitH !== null && explicitH > 0) {
+    height = Math.min(115, Math.max(minHeight + 2.5, explicitH));
+  } else if (levels !== null && levels > 0) {
+    height = Math.min(115, Math.max(minHeight + 2.5, levels * 3.4 + (roofLevels ? roofLevels * 2.8 : 0)));
+  } else {
+    height = Math.max(minHeight + 3.0, Math.round((14 + deterministicHash(id) * 10) * 10) / 10);
   }
-  return Math.round((14 + deterministicHash(id) * 10) * 10) / 10;
+
+  const roofShape = normalizeRoofShape(tags['roof:shape']);
+  const explicitRoofH = parseNumericMeters(tags['roof:height']);
+  let roofHeight;
+  if (roofShape && roofShape !== 'flat') {
+    const availH = Math.max(1.5, height - minHeight - 1.5);
+    if (explicitRoofH !== null && explicitRoofH > 0) {
+      roofHeight = Math.min(availH, Math.max(1.2, explicitRoofH));
+    } else if (roofLevels !== null && roofLevels > 0) {
+      roofHeight = Math.min(availH, Math.max(1.4, roofLevels * 2.8));
+    } else {
+      const areaSq = ringAreaMetersSq(outerRing);
+      const approxRadius = Math.sqrt(areaSq / Math.PI);
+      const est = Math.max(2.0, approxRadius * 0.42);
+      roofHeight = Math.min(availH, Math.min(11, est));
+    }
+    roofHeight = Math.round(roofHeight * 10) / 10;
+  }
+
+  const props = {
+    height: Math.round(height * 10) / 10,
+  };
+  if (minHeight > 0.1) props.minHeight = Math.round(minHeight * 10) / 10;
+  if (roofShape && roofShape !== 'flat') {
+    props.roofShape = roofShape;
+    props.roofHeight = roofHeight;
+  }
+  if (isPart) props.isPart = true;
+  return props;
 }
 
 function isInsideBbox(lon, lat, pad = 0.0005) {
@@ -601,7 +682,8 @@ async function main() {
   ]);
 
   const relationOuterWayIds = new Set();
-  const buildings = [];
+  const rawBuildings = [];
+  const buildingParts = [];
   const parks = [];
   const water = [];
   const roads = [];
@@ -633,7 +715,8 @@ async function main() {
     const tags = rel.tags || {};
     if (tags.type !== 'multipolygon') continue;
 
-    const isBuilding = Boolean(tags.building && tags.building !== 'no');
+    const isPart = Boolean(tags['building:part'] && tags['building:part'] !== 'no');
+    const isBuilding = !isPart && Boolean(tags.building && tags.building !== 'no');
     const isPark =
       PARK_LEISURE.has(tags.leisure) ||
       PARK_LANDUSE.has(tags.landuse) ||
@@ -643,7 +726,7 @@ async function main() {
       tags.amenity === 'fountain' ||
       tags.waterway === 'riverbank';
 
-    if (!isBuilding && !isPark && !isWater) continue;
+    if (!isPart && !isBuilding && !isPark && !isWater) continue;
 
     const { outers, inners } = extractMultipolygonRings(rel);
     if (outers.length === 0) continue;
@@ -654,11 +737,13 @@ async function main() {
       if (!isInsideBbox(cLon, cLat, 0.0008)) continue;
       const rings = i === 0 ? [outer, ...inners] : [outer];
 
-      if (isBuilding) {
-        buildings.push({
+      if (isPart || isBuilding) {
+        const props = computeBuildingProps(rel.id, tags, isPart, outer);
+        const target = isPart ? buildingParts : rawBuildings;
+        target.push({
           id: `rel/${rel.id}${outers.length > 1 ? `_${i}` : ''}`,
           name: tags.name || undefined,
-          height: computeBuildingHeight(rel.id, tags),
+          ...props,
           rings,
         });
       } else if (isWater) {
@@ -708,15 +793,19 @@ async function main() {
 
     if (!isClosed) continue;
 
-    if (tags.building && tags.building !== 'no' && !relationOuterWayIds.has(way.id)) {
+    const isPart = Boolean(tags['building:part'] && tags['building:part'] !== 'no');
+    const isBuilding = !isPart && Boolean(tags.building && tags.building !== 'no');
+    if ((isPart || isBuilding) && !relationOuterWayIds.has(way.id)) {
       const coords = ringNodeIdsToCoords(nodeIds, nodeMap);
       if (coords) {
         const [cLon, cLat] = ringCentroid(coords);
         if (isInsideBbox(cLon, cLat, 0.0008)) {
-          buildings.push({
+          const props = computeBuildingProps(way.id, tags, isPart, coords);
+          const target = isPart ? buildingParts : rawBuildings;
+          target.push({
             id: `way/${way.id}`,
             name: tags.name || undefined,
-            height: computeBuildingHeight(way.id, tags),
+            ...props,
             rings: [coords],
           });
         }
@@ -761,6 +850,84 @@ async function main() {
       }
     }
   }
+
+  // Deduplicar contornos padre (`building`) cuando existen `building:part` detallados dentro de su huella
+  const partGrid = new Map();
+  const PART_CELL_M = 50;
+  const indexedParts = buildingParts.map((part) => {
+    const [cLon, cLat] = ringCentroid(part.rings[0]);
+    const [cx, cz] = projectToMeters(cLon, cLat);
+    const areaSq = ringAreaMetersSq(part.rings[0]);
+    const entry = { part, cx, cz, areaSq };
+    const gx = Math.floor(cx / PART_CELL_M);
+    const gz = Math.floor(cz / PART_CELL_M);
+    const key = `${gx}_${gz}`;
+    const list = partGrid.get(key) || [];
+    list.push(entry);
+    partGrid.set(key, list);
+    return entry;
+  });
+
+  let omittedParentBuildings = 0;
+  const buildings = [];
+  for (const b of rawBuildings) {
+    const outerXZ = b.rings[0].map(([lon, lat]) => projectToMeters(lon, lat));
+    const holesXZ = b.rings.slice(1).map((r) => r.map(([lon, lat]) => projectToMeters(lon, lat)));
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    for (const [px, pz] of outerXZ) {
+      if (px < minX) minX = px;
+      if (px > maxX) maxX = px;
+      if (pz < minZ) minZ = pz;
+      if (pz > maxZ) maxZ = pz;
+    }
+
+    const gx0 = Math.floor(minX / PART_CELL_M);
+    const gx1 = Math.floor(maxX / PART_CELL_M);
+    const gz0 = Math.floor(minZ / PART_CELL_M);
+    const gz1 = Math.floor(maxZ / PART_CELL_M);
+
+    let groundPartsArea = 0;
+    let allPartsArea = 0;
+    let matchCount = 0;
+    for (let gx = gx0; gx <= gx1; gx++) {
+      for (let gz = gz0; gz <= gz1; gz++) {
+        const list = partGrid.get(`${gx}_${gz}`);
+        if (!list) continue;
+        for (const item of list) {
+          if (item.cx < minX || item.cx > maxX || item.cz < minZ || item.cz > maxZ) continue;
+          if (!pointInRingXZMeters(item.cx, item.cz, outerXZ)) continue;
+          if (holesXZ.some((h) => pointInRingXZMeters(item.cx, item.cz, h))) continue;
+          matchCount++;
+          allPartsArea += item.areaSq;
+          if ((item.part.minHeight ?? 0) < 3.5) {
+            groundPartsArea += item.areaSq;
+          }
+        }
+      }
+    }
+
+    const parentArea = ringAreaMetersSq(b.rings[0]);
+    const coveredByParts =
+      parentArea > 1 &&
+      (groundPartsArea >= parentArea * 0.45 || (matchCount >= 2 && allPartsArea >= parentArea * 0.35));
+    if (coveredByParts) {
+      omittedParentBuildings++;
+    } else {
+      buildings.push(b);
+    }
+  }
+  for (const item of indexedParts) {
+    buildings.push(item.part);
+  }
+  const roofShapedCount = buildings.filter((b) => b.roofShape && b.roofShape !== 'flat').length;
+  console.log(
+    `Arquitectura 3D procesada: ${buildings.length - buildingParts.length} edificios simples, ` +
+      `${buildingParts.length} building:part (${omittedParentBuildings} contornos padre reemplazados), ` +
+      `${roofShapedCount} con tejado con forma OSM.`
+  );
 
   // Asegurar lámina de agua de Fuente de Neptuno
   const hasNeptunoWater = water.some((w) => {

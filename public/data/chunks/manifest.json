@@ -11,1163 +11,17 @@
       40.43
     ],
     "chunkSizeM": 400,
-    "generatedAt": "2026-11-15T12:07:06.015Z",
+    "generatedAt": "2026-11-15T12:58:45.549Z",
     "source": "OpenStreetMap"
   },
   "totals": {
     "chunks": 88,
-    "buildings": 9936,
+    "buildings": 13500,
     "roads": 6387,
     "parks": 1177,
     "water": 130,
     "trees": 7426
   },
-  "chunks": [
-    {
-      "key": "-5_-5",
-      "cx": -5,
-      "cz": -5,
-      "file": "chunk_-5_-5.json",
-      "counts": {
-        "buildings": 11,
-        "roads": 3,
-        "parks": 0,
-        "water": 0,
-        "trees": 2
-      }
-    },
-    {
-      "key": "-5_-4",
-      "cx": -5,
-      "cz": -4,
-      "file": "chunk_-5_-4.json",
-      "counts": {
-        "buildings": 49,
-        "roads": 59,
-        "parks": 6,
-        "water": 0,
-        "trees": 46
-      }
-    },
-    {
-      "key": "-5_-3",
-      "cx": -5,
-      "cz": -3,
-      "file": "chunk_-5_-3.json",
-      "counts": {
-        "buildings": 78,
-        "roads": 70,
-        "parks": 26,
-        "water": 1,
-        "trees": 57
-      }
-    },
-    {
-      "key": "-5_-2",
-      "cx": -5,
-      "cz": -2,
-      "file": "chunk_-5_-2.json",
-      "counts": {
-        "buildings": 28,
-        "roads": 109,
-        "parks": 58,
-        "water": 7,
-        "trees": 73
-      }
-    },
-    {
-      "key": "-5_-1",
-      "cx": -5,
-      "cz": -1,
-      "file": "chunk_-5_-1.json",
-      "counts": {
-        "buildings": 6,
-        "roads": 22,
-        "parks": 3,
-        "water": 0,
-        "trees": 4
-      }
-    },
-    {
-      "key": "-5_0",
-      "cx": -5,
-      "cz": 0,
-      "file": "chunk_-5_0.json",
-      "counts": {
-        "buildings": 47,
-        "roads": 79,
-        "parks": 19,
-        "water": 4,
-        "trees": 48
-      }
-    },
-    {
-      "key": "-5_1",
-      "cx": -5,
-      "cz": 1,
-      "file": "chunk_-5_1.json",
-      "counts": {
-        "buildings": 71,
-        "roads": 103,
-        "parks": 30,
-        "water": 0,
-        "trees": 107
-      }
-    },
-    {
-      "key": "-5_2",
-      "cx": -5,
-      "cz": 2,
-      "file": "chunk_-5_2.json",
-      "counts": {
-        "buildings": 37,
-        "roads": 44,
-        "parks": 21,
-        "water": 0,
-        "trees": 2
-      }
-    },
-    {
-      "key": "-4_-5",
-      "cx": -4,
-      "cz": -5,
-      "file": "chunk_-4_-5.json",
-      "counts": {
-        "buildings": 9,
-        "roads": 11,
-        "parks": 0,
-        "water": 0,
-        "trees": 15
-      }
-    },
-    {
-      "key": "-4_-4",
-      "cx": -4,
-      "cz": -4,
-      "file": "chunk_-4_-4.json",
-      "counts": {
-        "buildings": 159,
-        "roads": 97,
-        "parks": 27,
-        "water": 1,
-        "trees": 239
-      }
-    },
-    {
-      "key": "-4_-3",
-      "cx": -4,
-      "cz": -3,
-      "file": "chunk_-4_-3.json",
-      "counts": {
-        "buildings": 186,
-        "roads": 228,
-        "parks": 25,
-        "water": 2,
-        "trees": 416
-      }
-    },
-    {
-      "key": "-4_-2",
-      "cx": -4,
-      "cz": -2,
-      "file": "chunk_-4_-2.json",
-      "counts": {
-        "buildings": 208,
-        "roads": 142,
-        "parks": 18,
-        "water": 1,
-        "trees": 195
-      }
-    },
-    {
-      "key": "-4_-1",
-      "cx": -4,
-      "cz": -1,
-      "file": "chunk_-4_-1.json",
-      "counts": {
-        "buildings": 238,
-        "roads": 140,
-        "parks": 20,
-        "water": 5,
-        "trees": 163
-      }
-    },
-    {
-      "key": "-4_0",
-      "cx": -4,
-      "cz": 0,
-      "file": "chunk_-4_0.json",
-      "counts": {
-        "buildings": 253,
-        "roads": 132,
-        "parks": 12,
-        "water": 3,
-        "trees": 106
-      }
-    },
-    {
-      "key": "-4_1",
-      "cx": -4,
-      "cz": 1,
-      "file": "chunk_-4_1.json",
-      "counts": {
-        "buildings": 334,
-        "roads": 125,
-        "parks": 3,
-        "water": 2,
-        "trees": 163
-      }
-    },
-    {
-      "key": "-4_2",
-      "cx": -4,
-      "cz": 2,
-      "file": "chunk_-4_2.json",
-      "counts": {
-        "buildings": 86,
-        "roads": 109,
-        "parks": 20,
-        "water": 1,
-        "trees": 229
-      }
-    },
-    {
-      "key": "-4_3",
-      "cx": -4,
-      "cz": 3,
-      "file": "chunk_-4_3.json",
-      "counts": {
-        "buildings": 0,
-        "roads": 2,
-        "parks": 0,
-        "water": 0,
-        "trees": 0
-      }
-    },
-    {
-      "key": "-3_-5",
-      "cx": -3,
-      "cz": -5,
-      "file": "chunk_-3_-5.json",
-      "counts": {
-        "buildings": 22,
-        "roads": 16,
-        "parks": 1,
-        "water": 0,
-        "trees": 11
-      }
-    },
-    {
-      "key": "-3_-4",
-      "cx": -3,
-      "cz": -4,
-      "file": "chunk_-3_-4.json",
-      "counts": {
-        "buildings": 276,
-        "roads": 129,
-        "parks": 11,
-        "water": 0,
-        "trees": 374
-      }
-    },
-    {
-      "key": "-3_-3",
-      "cx": -3,
-      "cz": -3,
-      "file": "chunk_-3_-3.json",
-      "counts": {
-        "buildings": 393,
-        "roads": 46,
-        "parks": 3,
-        "water": 2,
-        "trees": 320
-      }
-    },
-    {
-      "key": "-3_-2",
-      "cx": -3,
-      "cz": -2,
-      "file": "chunk_-3_-2.json",
-      "counts": {
-        "buildings": 245,
-        "roads": 121,
-        "parks": 2,
-        "water": 0,
-        "trees": 225
-      }
-    },
-    {
-      "key": "-3_-1",
-      "cx": -3,
-      "cz": -1,
-      "file": "chunk_-3_-1.json",
-      "counts": {
-        "buildings": 233,
-        "roads": 137,
-        "parks": 4,
-        "water": 2,
-        "trees": 120
-      }
-    },
-    {
-      "key": "-3_0",
-      "cx": -3,
-      "cz": 0,
-      "file": "chunk_-3_0.json",
-      "counts": {
-        "buildings": 292,
-        "roads": 122,
-        "parks": 5,
-        "water": 3,
-        "trees": 70
-      }
-    },
-    {
-      "key": "-3_1",
-      "cx": -3,
-      "cz": 1,
-      "file": "chunk_-3_1.json",
-      "counts": {
-        "buildings": 371,
-        "roads": 44,
-        "parks": 0,
-        "water": 1,
-        "trees": 151
-      }
-    },
-    {
-      "key": "-3_2",
-      "cx": -3,
-      "cz": 2,
-      "file": "chunk_-3_2.json",
-      "counts": {
-        "buildings": 112,
-        "roads": 81,
-        "parks": 3,
-        "water": 0,
-        "trees": 210
-      }
-    },
-    {
-      "key": "-3_3",
-      "cx": -3,
-      "cz": 3,
-      "file": "chunk_-3_3.json",
-      "counts": {
-        "buildings": 0,
-        "roads": 1,
-        "parks": 0,
-        "water": 0,
-        "trees": 0
-      }
-    },
-    {
-      "key": "-2_-5",
-      "cx": -2,
-      "cz": -5,
-      "file": "chunk_-2_-5.json",
-      "counts": {
-        "buildings": 34,
-        "roads": 10,
-        "parks": 0,
-        "water": 0,
-        "trees": 2
-      }
-    },
-    {
-      "key": "-2_-4",
-      "cx": -2,
-      "cz": -4,
-      "file": "chunk_-2_-4.json",
-      "counts": {
-        "buildings": 214,
-        "roads": 127,
-        "parks": 14,
-        "water": 3,
-        "trees": 300
-      }
-    },
-    {
-      "key": "-2_-3",
-      "cx": -2,
-      "cz": -3,
-      "file": "chunk_-2_-3.json",
-      "counts": {
-        "buildings": 379,
-        "roads": 52,
-        "parks": 8,
-        "water": 0,
-        "trees": 283
-      }
-    },
-    {
-      "key": "-2_-2",
-      "cx": -2,
-      "cz": -2,
-      "file": "chunk_-2_-2.json",
-      "counts": {
-        "buildings": 288,
-        "roads": 69,
-        "parks": 1,
-        "water": 2,
-        "trees": 217
-      }
-    },
-    {
-      "key": "-2_-1",
-      "cx": -2,
-      "cz": -1,
-      "file": "chunk_-2_-1.json",
-      "counts": {
-        "buildings": 245,
-        "roads": 79,
-        "parks": 2,
-        "water": 0,
-        "trees": 62
-      }
-    },
-    {
-      "key": "-2_0",
-      "cx": -2,
-      "cz": 0,
-      "file": "chunk_-2_0.json",
-      "counts": {
-        "buildings": 337,
-        "roads": 64,
-        "parks": 2,
-        "water": 0,
-        "trees": 100
-      }
-    },
-    {
-      "key": "-2_1",
-      "cx": -2,
-      "cz": 1,
-      "file": "chunk_-2_1.json",
-      "counts": {
-        "buildings": 449,
-        "roads": 116,
-        "parks": 1,
-        "water": 0,
-        "trees": 27
-      }
-    },
-    {
-      "key": "-2_2",
-      "cx": -2,
-      "cz": 2,
-      "file": "chunk_-2_2.json",
-      "counts": {
-        "buildings": 171,
-        "roads": 142,
-        "parks": 2,
-        "water": 1,
-        "trees": 129
-      }
-    },
-    {
-      "key": "-2_3",
-      "cx": -2,
-      "cz": 3,
-      "file": "chunk_-2_3.json",
-      "counts": {
-        "buildings": 0,
-        "roads": 3,
-        "parks": 0,
-        "water": 0,
-        "trees": 0
-      }
-    },
-    {
-      "key": "-1_-6",
-      "cx": -1,
-      "cz": -6,
-      "file": "chunk_-1_-6.json",
-      "counts": {
-        "buildings": 0,
-        "roads": 1,
-        "parks": 0,
-        "water": 0,
-        "trees": 0
-      }
-    },
-    {
-      "key": "-1_-5",
-      "cx": -1,
-      "cz": -5,
-      "file": "chunk_-1_-5.json",
-      "counts": {
-        "buildings": 18,
-        "roads": 5,
-        "parks": 1,
-        "water": 0,
-        "trees": 22
-      }
-    },
-    {
-      "key": "-1_-4",
-      "cx": -1,
-      "cz": -4,
-      "file": "chunk_-1_-4.json",
-      "counts": {
-        "buildings": 151,
-        "roads": 139,
-        "parks": 26,
-        "water": 1,
-        "trees": 195
-      }
-    },
-    {
-      "key": "-1_-3",
-      "cx": -1,
-      "cz": -3,
-      "file": "chunk_-1_-3.json",
-      "counts": {
-        "buildings": 330,
-        "roads": 69,
-        "parks": 5,
-        "water": 1,
-        "trees": 237
-      }
-    },
-    {
-      "key": "-1_-2",
-      "cx": -1,
-      "cz": -2,
-      "file": "chunk_-1_-2.json",
-      "counts": {
-        "buildings": 186,
-        "roads": 63,
-        "parks": 10,
-        "water": 1,
-        "trees": 257
-      }
-    },
-    {
-      "key": "-1_-1",
-      "cx": -1,
-      "cz": -1,
-      "file": "chunk_-1_-1.json",
-      "counts": {
-        "buildings": 122,
-        "roads": 113,
-        "parks": 5,
-        "water": 3,
-        "trees": 156
-      }
-    },
-    {
-      "key": "-1_0",
-      "cx": -1,
-      "cz": 0,
-      "file": "chunk_-1_0.json",
-      "counts": {
-        "buildings": 328,
-        "roads": 53,
-        "parks": 2,
-        "water": 0,
-        "trees": 88
-      }
-    },
-    {
-      "key": "-1_1",
-      "cx": -1,
-      "cz": 1,
-      "file": "chunk_-1_1.json",
-      "counts": {
-        "buildings": 254,
-        "roads": 90,
-        "parks": 14,
-        "water": 3,
-        "trees": 126
-      }
-    },
-    {
-      "key": "-1_2",
-      "cx": -1,
-      "cz": 2,
-      "file": "chunk_-1_2.json",
-      "counts": {
-        "buildings": 109,
-        "roads": 101,
-        "parks": 4,
-        "water": 1,
-        "trees": 119
-      }
-    },
-    {
-      "key": "-1_3",
-      "cx": -1,
-      "cz": 3,
-      "file": "chunk_-1_3.json",
-      "counts": {
-        "buildings": 0,
-        "roads": 1,
-        "parks": 0,
-        "water": 0,
-        "trees": 0
-      }
-    },
-    {
-      "key": "0_-5",
-      "cx": 0,
-      "cz": -5,
-      "file": "chunk_0_-5.json",
-      "counts": {
-        "buildings": 16,
-        "roads": 9,
-        "parks": 1,
-        "water": 0,
-        "trees": 2
-      }
-    },
-    {
-      "key": "0_-4",
-      "cx": 0,
-      "cz": -4,
-      "file": "chunk_0_-4.json",
-      "counts": {
-        "buildings": 134,
-        "roads": 45,
-        "parks": 12,
-        "water": 1,
-        "trees": 43
-      }
-    },
-    {
-      "key": "0_-3",
-      "cx": 0,
-      "cz": -3,
-      "file": "chunk_0_-3.json",
-      "counts": {
-        "buildings": 74,
-        "roads": 124,
-        "parks": 22,
-        "water": 3,
-        "trees": 286
-      }
-    },
-    {
-      "key": "0_-2",
-      "cx": 0,
-      "cz": -2,
-      "file": "chunk_0_-2.json",
-      "counts": {
-        "buildings": 99,
-        "roads": 122,
-        "parks": 13,
-        "water": 4,
-        "trees": 151
-      }
-    },
-    {
-      "key": "0_-1",
-      "cx": 0,
-      "cz": -1,
-      "file": "chunk_0_-1.json",
-      "counts": {
-        "buildings": 69,
-        "roads": 76,
-        "parks": 11,
-        "water": 2,
-        "trees": 121
-      }
-    },
-    {
-      "key": "0_0",
-      "cx": 0,
-      "cz": 0,
-      "file": "chunk_0_0.json",
-      "counts": {
-        "buildings": 73,
-        "roads": 158,
-        "parks": 41,
-        "water": 5,
-        "trees": 70
-      }
-    },
-    {
-      "key": "0_1",
-      "cx": 0,
-      "cz": 1,
-      "file": "chunk_0_1.json",
-      "counts": {
-        "buildings": 61,
-        "roads": 256,
-        "parks": 52,
-        "water": 9,
-        "trees": 157
-      }
-    },
-    {
-      "key": "0_2",
-      "cx": 0,
-      "cz": 2,
-      "file": "chunk_0_2.json",
-      "counts": {
-        "buildings": 67,
-        "roads": 172,
-        "parks": 5,
-        "water": 0,
-        "trees": 35
-      }
-    },
-    {
-      "key": "0_3",
-      "cx": 0,
-      "cz": 3,
-      "file": "chunk_0_3.json",
-      "counts": {
-        "buildings": 0,
-        "roads": 3,
-        "parks": 0,
-        "water": 0,
-        "trees": 0
-      }
-    },
-    {
-      "key": "1_-5",
-      "cx": 1,
-      "cz": -5,
-      "file": "chunk_1_-5.json",
-      "counts": {
-        "buildings": 17,
-        "roads": 5,
-        "parks": 0,
-        "water": 0,
-        "trees": 0
-      }
-    },
-    {
-      "key": "1_-4",
-      "cx": 1,
-      "cz": -4,
-      "file": "chunk_1_-4.json",
-      "counts": {
-        "buildings": 146,
-        "roads": 64,
-        "parks": 0,
-        "water": 0,
-        "trees": 48
-      }
-    },
-    {
-      "key": "1_-3",
-      "cx": 1,
-      "cz": -3,
-      "file": "chunk_1_-3.json",
-      "counts": {
-        "buildings": 122,
-        "roads": 71,
-        "parks": 5,
-        "water": 1,
-        "trees": 147
-      }
-    },
-    {
-      "key": "1_-2",
-      "cx": 1,
-      "cz": -2,
-      "file": "chunk_1_-2.json",
-      "counts": {
-        "buildings": 110,
-        "roads": 122,
-        "parks": 30,
-        "water": 3,
-        "trees": 103
-      }
-    },
-    {
-      "key": "1_-1",
-      "cx": 1,
-      "cz": -1,
-      "file": "chunk_1_-1.json",
-      "counts": {
-        "buildings": 14,
-        "roads": 102,
-        "parks": 114,
-        "water": 4,
-        "trees": 50
-      }
-    },
-    {
-      "key": "1_0",
-      "cx": 1,
-      "cz": 0,
-      "file": "chunk_1_0.json",
-      "counts": {
-        "buildings": 14,
-        "roads": 96,
-        "parks": 99,
-        "water": 5,
-        "trees": 145
-      }
-    },
-    {
-      "key": "1_1",
-      "cx": 1,
-      "cz": 1,
-      "file": "chunk_1_1.json",
-      "counts": {
-        "buildings": 25,
-        "roads": 82,
-        "parks": 37,
-        "water": 2,
-        "trees": 18
-      }
-    },
-    {
-      "key": "1_2",
-      "cx": 1,
-      "cz": 2,
-      "file": "chunk_1_2.json",
-      "counts": {
-        "buildings": 40,
-        "roads": 92,
-        "parks": 3,
-        "water": 0,
-        "trees": 1
-      }
-    },
-    {
-      "key": "2_-5",
-      "cx": 2,
-      "cz": -5,
-      "file": "chunk_2_-5.json",
-      "counts": {
-        "buildings": 15,
-        "roads": 4,
-        "parks": 2,
-        "water": 0,
-        "trees": 2
-      }
-    },
-    {
-      "key": "2_-4",
-      "cx": 2,
-      "cz": -4,
-      "file": "chunk_2_-4.json",
-      "counts": {
-        "buildings": 145,
-        "roads": 33,
-        "parks": 5,
-        "water": 0,
-        "trees": 53
-      }
-    },
-    {
-      "key": "2_-3",
-      "cx": 2,
-      "cz": -3,
-      "file": "chunk_2_-3.json",
-      "counts": {
-        "buildings": 174,
-        "roads": 83,
-        "parks": 0,
-        "water": 0,
-        "trees": 44
-      }
-    },
-    {
-      "key": "2_-2",
-      "cx": 2,
-      "cz": -2,
-      "file": "chunk_2_-2.json",
-      "counts": {
-        "buildings": 41,
-        "roads": 172,
-        "parks": 67,
-        "water": 10,
-        "trees": 17
-      }
-    },
-    {
-      "key": "2_-1",
-      "cx": 2,
-      "cz": -1,
-      "file": "chunk_2_-1.json",
-      "counts": {
-        "buildings": 14,
-        "roads": 54,
-        "parks": 28,
-        "water": 6,
-        "trees": 11
-      }
-    },
-    {
-      "key": "2_0",
-      "cx": 2,
-      "cz": 0,
-      "file": "chunk_2_0.json",
-      "counts": {
-        "buildings": 7,
-        "roads": 61,
-        "parks": 56,
-        "water": 2,
-        "trees": 20
-      }
-    },
-    {
-      "key": "2_1",
-      "cx": 2,
-      "cz": 1,
-      "file": "chunk_2_1.json",
-      "counts": {
-        "buildings": 31,
-        "roads": 85,
-        "parks": 46,
-        "water": 5,
-        "trees": 7
-      }
-    },
-    {
-      "key": "2_2",
-      "cx": 2,
-      "cz": 2,
-      "file": "chunk_2_2.json",
-      "counts": {
-        "buildings": 113,
-        "roads": 59,
-        "parks": 24,
-        "water": 0,
-        "trees": 12
-      }
-    },
-    {
-      "key": "2_3",
-      "cx": 2,
-      "cz": 3,
-      "file": "chunk_2_3.json",
-      "counts": {
-        "buildings": 0,
-        "roads": 3,
-        "parks": 0,
-        "water": 0,
-        "trees": 0
-      }
-    },
-    {
-      "key": "3_-5",
-      "cx": 3,
-      "cz": -5,
-      "file": "chunk_3_-5.json",
-      "counts": {
-        "buildings": 10,
-        "roads": 17,
-        "parks": 1,
-        "water": 0,
-        "trees": 0
-      }
-    },
-    {
-      "key": "3_-4",
-      "cx": 3,
-      "cz": -4,
-      "file": "chunk_3_-4.json",
-      "counts": {
-        "buildings": 156,
-        "roads": 58,
-        "parks": 0,
-        "water": 0,
-        "trees": 19
-      }
-    },
-    {
-      "key": "3_-3",
-      "cx": 3,
-      "cz": -3,
-      "file": "chunk_3_-3.json",
-      "counts": {
-        "buildings": 209,
-        "roads": 140,
-        "parks": 4,
-        "water": 1,
-        "trees": 25
-      }
-    },
-    {
-      "key": "3_-2",
-      "cx": 3,
-      "cz": -2,
-      "file": "chunk_3_-2.json",
-      "counts": {
-        "buildings": 160,
-        "roads": 89,
-        "parks": 4,
-        "water": 0,
-        "trees": 17
-      }
-    },
-    {
-      "key": "3_-1",
-      "cx": 3,
-      "cz": -1,
-      "file": "chunk_3_-1.json",
-      "counts": {
-        "buildings": 112,
-        "roads": 127,
-        "parks": 27,
-        "water": 2,
-        "trees": 53
-      }
-    },
-    {
-      "key": "3_0",
-      "cx": 3,
-      "cz": 0,
-      "file": "chunk_3_0.json",
-      "counts": {
-        "buildings": 20,
-        "roads": 81,
-        "parks": 16,
-        "water": 12,
-        "trees": 35
-      }
-    },
-    {
-      "key": "3_1",
-      "cx": 3,
-      "cz": 1,
-      "file": "chunk_3_1.json",
-      "counts": {
-        "buildings": 55,
-        "roads": 97,
-        "parks": 22,
-        "water": 1,
-        "trees": 23
-      }
-    },
-    {
-      "key": "3_2",
-      "cx": 3,
-      "cz": 2,
-      "file": "chunk_3_2.json",
-      "counts": {
-        "buildings": 157,
-        "roads": 88,
-        "parks": 8,
-        "water": 1,
-        "trees": 37
-      }
-    },
-    {
-      "key": "3_3",
-      "cx": 3,
-      "cz": 3,
-      "file": "chunk_3_3.json",
-      "counts": {
-        "buildings": 0,
-        "roads": 1,
-        "parks": 0,
-        "water": 0,
-        "trees": 0
-      }
-    },
-    {
-      "key": "4_-5",
-      "cx": 4,
-      "cz": -5,
-      "file": "chunk_4_-5.json",
-      "counts": {
-        "buildings": 0,
-        "roads": 6,
-        "parks": 0,
-        "water": 0,
-        "trees": 0
-      }
-    },
-    {
-      "key": "4_-4",
-      "cx": 4,
-      "cz": -4,
-      "file": "chunk_4_-4.json",
-      "counts": {
-        "buildings": 20,
-        "roads": 4,
-        "parks": 0,
-        "water": 0,
-        "trees": 0
-      }
-    },
-    {
-      "key": "4_-3",
-      "cx": 4,
-      "cz": -3,
-      "file": "chunk_4_-3.json",
-      "counts": {
-        "buildings": 7,
-        "roads": 11,
-        "parks": 3,
-        "water": 0,
-        "trees": 4
-      }
-    },
-    {
-      "key": "4_-2",
-      "cx": 4,
-      "cz": -2,
-      "file": "chunk_4_-2.json",
-      "counts": {
-        "buildings": 12,
-        "roads": 7,
-        "parks": 0,
-        "water": 0,
-        "trees": 3
-      }
-    },
-    {
-      "key": "4_-1",
-      "cx": 4,
-      "cz": -1,
-      "file": "chunk_4_-1.json",
-      "counts": {
-        "buildings": 14,
-        "roads": 13,
-        "parks": 2,
-        "water": 0,
-        "trees": 1
-      }
-    },
-    {
-      "key": "4_0",
-      "cx": 4,
-      "cz": 0,
-      "file": "chunk_4_0.json",
-      "counts": {
-        "buildings": 9,
-        "roads": 10,
-        "parks": 1,
-        "water": 0,
-        "trees": 0
-      }
-    },
-    {
-      "key": "4_1",
-      "cx": 4,
-      "cz": 1,
-      "file": "chunk_4_1.json",
-      "counts": {
-        "buildings": 7,
-        "roads": 12,
-        "parks": 1,
-        "water": 0,
-        "trees": 0
-      }
-    },
-    {
-      "key": "4_2",
-      "cx": 4,
-      "cz": 2,
-      "file": "chunk_4_2.json",
-      "counts": {
-        "buildings": 8,
-        "roads": 4,
-        "parks": 1,
-        "water": 0,
-        "trees": 0
-      }
-    }
-  ],
   "dem": {
     "cols": 140,
     "rows": 116,
@@ -17422,5 +16276,1151 @@
       51.9,
       52.2
     ]
-  }
+  },
+  "chunks": [
+    {
+      "key": "-5_-5",
+      "cx": -5,
+      "cz": -5,
+      "file": "chunk_-5_-5.json",
+      "counts": {
+        "buildings": 11,
+        "roads": 3,
+        "parks": 0,
+        "water": 0,
+        "trees": 2
+      }
+    },
+    {
+      "key": "-5_-4",
+      "cx": -5,
+      "cz": -4,
+      "file": "chunk_-5_-4.json",
+      "counts": {
+        "buildings": 49,
+        "roads": 59,
+        "parks": 6,
+        "water": 0,
+        "trees": 46
+      }
+    },
+    {
+      "key": "-5_-3",
+      "cx": -5,
+      "cz": -3,
+      "file": "chunk_-5_-3.json",
+      "counts": {
+        "buildings": 92,
+        "roads": 70,
+        "parks": 26,
+        "water": 1,
+        "trees": 57
+      }
+    },
+    {
+      "key": "-5_-2",
+      "cx": -5,
+      "cz": -2,
+      "file": "chunk_-5_-2.json",
+      "counts": {
+        "buildings": 44,
+        "roads": 109,
+        "parks": 58,
+        "water": 7,
+        "trees": 73
+      }
+    },
+    {
+      "key": "-5_-1",
+      "cx": -5,
+      "cz": -1,
+      "file": "chunk_-5_-1.json",
+      "counts": {
+        "buildings": 94,
+        "roads": 22,
+        "parks": 3,
+        "water": 0,
+        "trees": 4
+      }
+    },
+    {
+      "key": "-5_0",
+      "cx": -5,
+      "cz": 0,
+      "file": "chunk_-5_0.json",
+      "counts": {
+        "buildings": 50,
+        "roads": 79,
+        "parks": 19,
+        "water": 4,
+        "trees": 48
+      }
+    },
+    {
+      "key": "-5_1",
+      "cx": -5,
+      "cz": 1,
+      "file": "chunk_-5_1.json",
+      "counts": {
+        "buildings": 77,
+        "roads": 103,
+        "parks": 30,
+        "water": 0,
+        "trees": 107
+      }
+    },
+    {
+      "key": "-5_2",
+      "cx": -5,
+      "cz": 2,
+      "file": "chunk_-5_2.json",
+      "counts": {
+        "buildings": 73,
+        "roads": 44,
+        "parks": 21,
+        "water": 0,
+        "trees": 2
+      }
+    },
+    {
+      "key": "-4_-5",
+      "cx": -4,
+      "cz": -5,
+      "file": "chunk_-4_-5.json",
+      "counts": {
+        "buildings": 9,
+        "roads": 11,
+        "parks": 0,
+        "water": 0,
+        "trees": 15
+      }
+    },
+    {
+      "key": "-4_-4",
+      "cx": -4,
+      "cz": -4,
+      "file": "chunk_-4_-4.json",
+      "counts": {
+        "buildings": 161,
+        "roads": 97,
+        "parks": 27,
+        "water": 1,
+        "trees": 239
+      }
+    },
+    {
+      "key": "-4_-3",
+      "cx": -4,
+      "cz": -3,
+      "file": "chunk_-4_-3.json",
+      "counts": {
+        "buildings": 421,
+        "roads": 228,
+        "parks": 25,
+        "water": 2,
+        "trees": 416
+      }
+    },
+    {
+      "key": "-4_-2",
+      "cx": -4,
+      "cz": -2,
+      "file": "chunk_-4_-2.json",
+      "counts": {
+        "buildings": 302,
+        "roads": 142,
+        "parks": 18,
+        "water": 1,
+        "trees": 195
+      }
+    },
+    {
+      "key": "-4_-1",
+      "cx": -4,
+      "cz": -1,
+      "file": "chunk_-4_-1.json",
+      "counts": {
+        "buildings": 273,
+        "roads": 140,
+        "parks": 20,
+        "water": 5,
+        "trees": 163
+      }
+    },
+    {
+      "key": "-4_0",
+      "cx": -4,
+      "cz": 0,
+      "file": "chunk_-4_0.json",
+      "counts": {
+        "buildings": 315,
+        "roads": 132,
+        "parks": 12,
+        "water": 3,
+        "trees": 106
+      }
+    },
+    {
+      "key": "-4_1",
+      "cx": -4,
+      "cz": 1,
+      "file": "chunk_-4_1.json",
+      "counts": {
+        "buildings": 343,
+        "roads": 125,
+        "parks": 3,
+        "water": 2,
+        "trees": 163
+      }
+    },
+    {
+      "key": "-4_2",
+      "cx": -4,
+      "cz": 2,
+      "file": "chunk_-4_2.json",
+      "counts": {
+        "buildings": 97,
+        "roads": 109,
+        "parks": 20,
+        "water": 1,
+        "trees": 229
+      }
+    },
+    {
+      "key": "-4_3",
+      "cx": -4,
+      "cz": 3,
+      "file": "chunk_-4_3.json",
+      "counts": {
+        "buildings": 0,
+        "roads": 2,
+        "parks": 0,
+        "water": 0,
+        "trees": 0
+      }
+    },
+    {
+      "key": "-3_-5",
+      "cx": -3,
+      "cz": -5,
+      "file": "chunk_-3_-5.json",
+      "counts": {
+        "buildings": 22,
+        "roads": 16,
+        "parks": 1,
+        "water": 0,
+        "trees": 11
+      }
+    },
+    {
+      "key": "-3_-4",
+      "cx": -3,
+      "cz": -4,
+      "file": "chunk_-3_-4.json",
+      "counts": {
+        "buildings": 282,
+        "roads": 129,
+        "parks": 11,
+        "water": 0,
+        "trees": 374
+      }
+    },
+    {
+      "key": "-3_-3",
+      "cx": -3,
+      "cz": -3,
+      "file": "chunk_-3_-3.json",
+      "counts": {
+        "buildings": 397,
+        "roads": 46,
+        "parks": 3,
+        "water": 2,
+        "trees": 320
+      }
+    },
+    {
+      "key": "-3_-2",
+      "cx": -3,
+      "cz": -2,
+      "file": "chunk_-3_-2.json",
+      "counts": {
+        "buildings": 574,
+        "roads": 121,
+        "parks": 2,
+        "water": 0,
+        "trees": 225
+      }
+    },
+    {
+      "key": "-3_-1",
+      "cx": -3,
+      "cz": -1,
+      "file": "chunk_-3_-1.json",
+      "counts": {
+        "buildings": 452,
+        "roads": 137,
+        "parks": 4,
+        "water": 2,
+        "trees": 120
+      }
+    },
+    {
+      "key": "-3_0",
+      "cx": -3,
+      "cz": 0,
+      "file": "chunk_-3_0.json",
+      "counts": {
+        "buildings": 439,
+        "roads": 122,
+        "parks": 5,
+        "water": 3,
+        "trees": 70
+      }
+    },
+    {
+      "key": "-3_1",
+      "cx": -3,
+      "cz": 1,
+      "file": "chunk_-3_1.json",
+      "counts": {
+        "buildings": 371,
+        "roads": 44,
+        "parks": 0,
+        "water": 1,
+        "trees": 151
+      }
+    },
+    {
+      "key": "-3_2",
+      "cx": -3,
+      "cz": 2,
+      "file": "chunk_-3_2.json",
+      "counts": {
+        "buildings": 186,
+        "roads": 81,
+        "parks": 3,
+        "water": 0,
+        "trees": 210
+      }
+    },
+    {
+      "key": "-3_3",
+      "cx": -3,
+      "cz": 3,
+      "file": "chunk_-3_3.json",
+      "counts": {
+        "buildings": 0,
+        "roads": 1,
+        "parks": 0,
+        "water": 0,
+        "trees": 0
+      }
+    },
+    {
+      "key": "-2_-5",
+      "cx": -2,
+      "cz": -5,
+      "file": "chunk_-2_-5.json",
+      "counts": {
+        "buildings": 53,
+        "roads": 10,
+        "parks": 0,
+        "water": 0,
+        "trees": 2
+      }
+    },
+    {
+      "key": "-2_-4",
+      "cx": -2,
+      "cz": -4,
+      "file": "chunk_-2_-4.json",
+      "counts": {
+        "buildings": 244,
+        "roads": 127,
+        "parks": 14,
+        "water": 3,
+        "trees": 300
+      }
+    },
+    {
+      "key": "-2_-3",
+      "cx": -2,
+      "cz": -3,
+      "file": "chunk_-2_-3.json",
+      "counts": {
+        "buildings": 417,
+        "roads": 52,
+        "parks": 8,
+        "water": 0,
+        "trees": 283
+      }
+    },
+    {
+      "key": "-2_-2",
+      "cx": -2,
+      "cz": -2,
+      "file": "chunk_-2_-2.json",
+      "counts": {
+        "buildings": 743,
+        "roads": 69,
+        "parks": 1,
+        "water": 2,
+        "trees": 217
+      }
+    },
+    {
+      "key": "-2_-1",
+      "cx": -2,
+      "cz": -1,
+      "file": "chunk_-2_-1.json",
+      "counts": {
+        "buildings": 713,
+        "roads": 79,
+        "parks": 2,
+        "water": 0,
+        "trees": 62
+      }
+    },
+    {
+      "key": "-2_0",
+      "cx": -2,
+      "cz": 0,
+      "file": "chunk_-2_0.json",
+      "counts": {
+        "buildings": 358,
+        "roads": 64,
+        "parks": 2,
+        "water": 0,
+        "trees": 100
+      }
+    },
+    {
+      "key": "-2_1",
+      "cx": -2,
+      "cz": 1,
+      "file": "chunk_-2_1.json",
+      "counts": {
+        "buildings": 451,
+        "roads": 116,
+        "parks": 1,
+        "water": 0,
+        "trees": 27
+      }
+    },
+    {
+      "key": "-2_2",
+      "cx": -2,
+      "cz": 2,
+      "file": "chunk_-2_2.json",
+      "counts": {
+        "buildings": 221,
+        "roads": 142,
+        "parks": 2,
+        "water": 1,
+        "trees": 129
+      }
+    },
+    {
+      "key": "-2_3",
+      "cx": -2,
+      "cz": 3,
+      "file": "chunk_-2_3.json",
+      "counts": {
+        "buildings": 0,
+        "roads": 3,
+        "parks": 0,
+        "water": 0,
+        "trees": 0
+      }
+    },
+    {
+      "key": "-1_-6",
+      "cx": -1,
+      "cz": -6,
+      "file": "chunk_-1_-6.json",
+      "counts": {
+        "buildings": 0,
+        "roads": 1,
+        "parks": 0,
+        "water": 0,
+        "trees": 0
+      }
+    },
+    {
+      "key": "-1_-5",
+      "cx": -1,
+      "cz": -5,
+      "file": "chunk_-1_-5.json",
+      "counts": {
+        "buildings": 18,
+        "roads": 5,
+        "parks": 1,
+        "water": 0,
+        "trees": 22
+      }
+    },
+    {
+      "key": "-1_-4",
+      "cx": -1,
+      "cz": -4,
+      "file": "chunk_-1_-4.json",
+      "counts": {
+        "buildings": 180,
+        "roads": 139,
+        "parks": 26,
+        "water": 1,
+        "trees": 195
+      }
+    },
+    {
+      "key": "-1_-3",
+      "cx": -1,
+      "cz": -3,
+      "file": "chunk_-1_-3.json",
+      "counts": {
+        "buildings": 344,
+        "roads": 69,
+        "parks": 5,
+        "water": 1,
+        "trees": 237
+      }
+    },
+    {
+      "key": "-1_-2",
+      "cx": -1,
+      "cz": -2,
+      "file": "chunk_-1_-2.json",
+      "counts": {
+        "buildings": 389,
+        "roads": 63,
+        "parks": 10,
+        "water": 1,
+        "trees": 257
+      }
+    },
+    {
+      "key": "-1_-1",
+      "cx": -1,
+      "cz": -1,
+      "file": "chunk_-1_-1.json",
+      "counts": {
+        "buildings": 331,
+        "roads": 113,
+        "parks": 5,
+        "water": 3,
+        "trees": 156
+      }
+    },
+    {
+      "key": "-1_0",
+      "cx": -1,
+      "cz": 0,
+      "file": "chunk_-1_0.json",
+      "counts": {
+        "buildings": 388,
+        "roads": 53,
+        "parks": 2,
+        "water": 0,
+        "trees": 88
+      }
+    },
+    {
+      "key": "-1_1",
+      "cx": -1,
+      "cz": 1,
+      "file": "chunk_-1_1.json",
+      "counts": {
+        "buildings": 275,
+        "roads": 90,
+        "parks": 14,
+        "water": 3,
+        "trees": 126
+      }
+    },
+    {
+      "key": "-1_2",
+      "cx": -1,
+      "cz": 2,
+      "file": "chunk_-1_2.json",
+      "counts": {
+        "buildings": 110,
+        "roads": 101,
+        "parks": 4,
+        "water": 1,
+        "trees": 119
+      }
+    },
+    {
+      "key": "-1_3",
+      "cx": -1,
+      "cz": 3,
+      "file": "chunk_-1_3.json",
+      "counts": {
+        "buildings": 0,
+        "roads": 1,
+        "parks": 0,
+        "water": 0,
+        "trees": 0
+      }
+    },
+    {
+      "key": "0_-5",
+      "cx": 0,
+      "cz": -5,
+      "file": "chunk_0_-5.json",
+      "counts": {
+        "buildings": 16,
+        "roads": 9,
+        "parks": 1,
+        "water": 0,
+        "trees": 2
+      }
+    },
+    {
+      "key": "0_-4",
+      "cx": 0,
+      "cz": -4,
+      "file": "chunk_0_-4.json",
+      "counts": {
+        "buildings": 138,
+        "roads": 45,
+        "parks": 12,
+        "water": 1,
+        "trees": 43
+      }
+    },
+    {
+      "key": "0_-3",
+      "cx": 0,
+      "cz": -3,
+      "file": "chunk_0_-3.json",
+      "counts": {
+        "buildings": 117,
+        "roads": 124,
+        "parks": 22,
+        "water": 3,
+        "trees": 286
+      }
+    },
+    {
+      "key": "0_-2",
+      "cx": 0,
+      "cz": -2,
+      "file": "chunk_0_-2.json",
+      "counts": {
+        "buildings": 184,
+        "roads": 122,
+        "parks": 13,
+        "water": 4,
+        "trees": 151
+      }
+    },
+    {
+      "key": "0_-1",
+      "cx": 0,
+      "cz": -1,
+      "file": "chunk_0_-1.json",
+      "counts": {
+        "buildings": 99,
+        "roads": 76,
+        "parks": 11,
+        "water": 2,
+        "trees": 121
+      }
+    },
+    {
+      "key": "0_0",
+      "cx": 0,
+      "cz": 0,
+      "file": "chunk_0_0.json",
+      "counts": {
+        "buildings": 150,
+        "roads": 158,
+        "parks": 41,
+        "water": 5,
+        "trees": 70
+      }
+    },
+    {
+      "key": "0_1",
+      "cx": 0,
+      "cz": 1,
+      "file": "chunk_0_1.json",
+      "counts": {
+        "buildings": 61,
+        "roads": 256,
+        "parks": 52,
+        "water": 9,
+        "trees": 157
+      }
+    },
+    {
+      "key": "0_2",
+      "cx": 0,
+      "cz": 2,
+      "file": "chunk_0_2.json",
+      "counts": {
+        "buildings": 210,
+        "roads": 172,
+        "parks": 5,
+        "water": 0,
+        "trees": 35
+      }
+    },
+    {
+      "key": "0_3",
+      "cx": 0,
+      "cz": 3,
+      "file": "chunk_0_3.json",
+      "counts": {
+        "buildings": 0,
+        "roads": 3,
+        "parks": 0,
+        "water": 0,
+        "trees": 0
+      }
+    },
+    {
+      "key": "1_-5",
+      "cx": 1,
+      "cz": -5,
+      "file": "chunk_1_-5.json",
+      "counts": {
+        "buildings": 23,
+        "roads": 5,
+        "parks": 0,
+        "water": 0,
+        "trees": 0
+      }
+    },
+    {
+      "key": "1_-4",
+      "cx": 1,
+      "cz": -4,
+      "file": "chunk_1_-4.json",
+      "counts": {
+        "buildings": 160,
+        "roads": 64,
+        "parks": 0,
+        "water": 0,
+        "trees": 48
+      }
+    },
+    {
+      "key": "1_-3",
+      "cx": 1,
+      "cz": -3,
+      "file": "chunk_1_-3.json",
+      "counts": {
+        "buildings": 129,
+        "roads": 71,
+        "parks": 5,
+        "water": 1,
+        "trees": 147
+      }
+    },
+    {
+      "key": "1_-2",
+      "cx": 1,
+      "cz": -2,
+      "file": "chunk_1_-2.json",
+      "counts": {
+        "buildings": 124,
+        "roads": 122,
+        "parks": 30,
+        "water": 3,
+        "trees": 103
+      }
+    },
+    {
+      "key": "1_-1",
+      "cx": 1,
+      "cz": -1,
+      "file": "chunk_1_-1.json",
+      "counts": {
+        "buildings": 16,
+        "roads": 102,
+        "parks": 114,
+        "water": 4,
+        "trees": 50
+      }
+    },
+    {
+      "key": "1_0",
+      "cx": 1,
+      "cz": 0,
+      "file": "chunk_1_0.json",
+      "counts": {
+        "buildings": 15,
+        "roads": 96,
+        "parks": 99,
+        "water": 5,
+        "trees": 145
+      }
+    },
+    {
+      "key": "1_1",
+      "cx": 1,
+      "cz": 1,
+      "file": "chunk_1_1.json",
+      "counts": {
+        "buildings": 27,
+        "roads": 82,
+        "parks": 37,
+        "water": 2,
+        "trees": 18
+      }
+    },
+    {
+      "key": "1_2",
+      "cx": 1,
+      "cz": 2,
+      "file": "chunk_1_2.json",
+      "counts": {
+        "buildings": 58,
+        "roads": 92,
+        "parks": 3,
+        "water": 0,
+        "trees": 1
+      }
+    },
+    {
+      "key": "2_-5",
+      "cx": 2,
+      "cz": -5,
+      "file": "chunk_2_-5.json",
+      "counts": {
+        "buildings": 15,
+        "roads": 4,
+        "parks": 2,
+        "water": 0,
+        "trees": 2
+      }
+    },
+    {
+      "key": "2_-4",
+      "cx": 2,
+      "cz": -4,
+      "file": "chunk_2_-4.json",
+      "counts": {
+        "buildings": 156,
+        "roads": 33,
+        "parks": 5,
+        "water": 0,
+        "trees": 53
+      }
+    },
+    {
+      "key": "2_-3",
+      "cx": 2,
+      "cz": -3,
+      "file": "chunk_2_-3.json",
+      "counts": {
+        "buildings": 178,
+        "roads": 83,
+        "parks": 0,
+        "water": 0,
+        "trees": 44
+      }
+    },
+    {
+      "key": "2_-2",
+      "cx": 2,
+      "cz": -2,
+      "file": "chunk_2_-2.json",
+      "counts": {
+        "buildings": 41,
+        "roads": 172,
+        "parks": 67,
+        "water": 10,
+        "trees": 17
+      }
+    },
+    {
+      "key": "2_-1",
+      "cx": 2,
+      "cz": -1,
+      "file": "chunk_2_-1.json",
+      "counts": {
+        "buildings": 14,
+        "roads": 54,
+        "parks": 28,
+        "water": 6,
+        "trees": 11
+      }
+    },
+    {
+      "key": "2_0",
+      "cx": 2,
+      "cz": 0,
+      "file": "chunk_2_0.json",
+      "counts": {
+        "buildings": 14,
+        "roads": 61,
+        "parks": 56,
+        "water": 2,
+        "trees": 20
+      }
+    },
+    {
+      "key": "2_1",
+      "cx": 2,
+      "cz": 1,
+      "file": "chunk_2_1.json",
+      "counts": {
+        "buildings": 31,
+        "roads": 85,
+        "parks": 46,
+        "water": 5,
+        "trees": 7
+      }
+    },
+    {
+      "key": "2_2",
+      "cx": 2,
+      "cz": 2,
+      "file": "chunk_2_2.json",
+      "counts": {
+        "buildings": 121,
+        "roads": 59,
+        "parks": 24,
+        "water": 0,
+        "trees": 12
+      }
+    },
+    {
+      "key": "2_3",
+      "cx": 2,
+      "cz": 3,
+      "file": "chunk_2_3.json",
+      "counts": {
+        "buildings": 0,
+        "roads": 3,
+        "parks": 0,
+        "water": 0,
+        "trees": 0
+      }
+    },
+    {
+      "key": "3_-5",
+      "cx": 3,
+      "cz": -5,
+      "file": "chunk_3_-5.json",
+      "counts": {
+        "buildings": 10,
+        "roads": 17,
+        "parks": 1,
+        "water": 0,
+        "trees": 0
+      }
+    },
+    {
+      "key": "3_-4",
+      "cx": 3,
+      "cz": -4,
+      "file": "chunk_3_-4.json",
+      "counts": {
+        "buildings": 158,
+        "roads": 58,
+        "parks": 0,
+        "water": 0,
+        "trees": 19
+      }
+    },
+    {
+      "key": "3_-3",
+      "cx": 3,
+      "cz": -3,
+      "file": "chunk_3_-3.json",
+      "counts": {
+        "buildings": 241,
+        "roads": 140,
+        "parks": 4,
+        "water": 1,
+        "trees": 25
+      }
+    },
+    {
+      "key": "3_-2",
+      "cx": 3,
+      "cz": -2,
+      "file": "chunk_3_-2.json",
+      "counts": {
+        "buildings": 170,
+        "roads": 89,
+        "parks": 4,
+        "water": 0,
+        "trees": 17
+      }
+    },
+    {
+      "key": "3_-1",
+      "cx": 3,
+      "cz": -1,
+      "file": "chunk_3_-1.json",
+      "counts": {
+        "buildings": 112,
+        "roads": 127,
+        "parks": 27,
+        "water": 2,
+        "trees": 53
+      }
+    },
+    {
+      "key": "3_0",
+      "cx": 3,
+      "cz": 0,
+      "file": "chunk_3_0.json",
+      "counts": {
+        "buildings": 46,
+        "roads": 81,
+        "parks": 16,
+        "water": 12,
+        "trees": 35
+      }
+    },
+    {
+      "key": "3_1",
+      "cx": 3,
+      "cz": 1,
+      "file": "chunk_3_1.json",
+      "counts": {
+        "buildings": 55,
+        "roads": 97,
+        "parks": 22,
+        "water": 1,
+        "trees": 23
+      }
+    },
+    {
+      "key": "3_2",
+      "cx": 3,
+      "cz": 2,
+      "file": "chunk_3_2.json",
+      "counts": {
+        "buildings": 161,
+        "roads": 88,
+        "parks": 8,
+        "water": 1,
+        "trees": 37
+      }
+    },
+    {
+      "key": "3_3",
+      "cx": 3,
+      "cz": 3,
+      "file": "chunk_3_3.json",
+      "counts": {
+        "buildings": 0,
+        "roads": 1,
+        "parks": 0,
+        "water": 0,
+        "trees": 0
+      }
+    },
+    {
+      "key": "4_-5",
+      "cx": 4,
+      "cz": -5,
+      "file": "chunk_4_-5.json",
+      "counts": {
+        "buildings": 0,
+        "roads": 6,
+        "parks": 0,
+        "water": 0,
+        "trees": 0
+      }
+    },
+    {
+      "key": "4_-4",
+      "cx": 4,
+      "cz": -4,
+      "file": "chunk_4_-4.json",
+      "counts": {
+        "buildings": 21,
+        "roads": 4,
+        "parks": 0,
+        "water": 0,
+        "trees": 0
+      }
+    },
+    {
+      "key": "4_-3",
+      "cx": 4,
+      "cz": -3,
+      "file": "chunk_4_-3.json",
+      "counts": {
+        "buildings": 7,
+        "roads": 11,
+        "parks": 3,
+        "water": 0,
+        "trees": 4
+      }
+    },
+    {
+      "key": "4_-2",
+      "cx": 4,
+      "cz": -2,
+      "file": "chunk_4_-2.json",
+      "counts": {
+        "buildings": 12,
+        "roads": 7,
+        "parks": 0,
+        "water": 0,
+        "trees": 3
+      }
+    },
+    {
+      "key": "4_-1",
+      "cx": 4,
+      "cz": -1,
+      "file": "chunk_4_-1.json",
+      "counts": {
+        "buildings": 14,
+        "roads": 13,
+        "parks": 2,
+        "water": 0,
+        "trees": 1
+      }
+    },
+    {
+      "key": "4_0",
+      "cx": 4,
+      "cz": 0,
+      "file": "chunk_4_0.json",
+      "counts": {
+        "buildings": 9,
+        "roads": 10,
+        "parks": 1,
+        "water": 0,
+        "trees": 0
+      }
+    },
+    {
+      "key": "4_1",
+      "cx": 4,
+      "cz": 1,
+      "file": "chunk_4_1.json",
+      "counts": {
+        "buildings": 7,
+        "roads": 12,
+        "parks": 1,
+        "water": 0,
+        "trees": 0
+      }
+    },
+    {
+      "key": "4_2",
+      "cx": 4,
+      "cz": 2,
+      "file": "chunk_4_2.json",
+      "counts": {
+        "buildings": 11,
+        "roads": 4,
+        "parks": 1,
+        "water": 0,
+        "trees": 0
+      }
+    }
+  ]
 }
