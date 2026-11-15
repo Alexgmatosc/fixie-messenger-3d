@@ -615,17 +615,18 @@ async function initApp(): Promise<void> {
       const preVForward = bikeState.velX * fwdX + bikeState.velZ * fwdZ;
       const isSkidding = skidInput && speedMag > 2.0 && preVForward > -0.5;
 
-      // 1. Giro físico real limitado por aceleración centrípeta máxima (v²/R <= 0.72g)
-      // A alta velocidad la inercia impide doblar en seco; para cerrar esquina rápido hay que hacer skid
-      const maxCornerAccel = 7.05; // ~0.72G en asfalto seco
-      const maxGripTurnRate = maxCornerAccel / Math.max(3.3, speedMag);
+      // 1. Giro ágil a ritmo urbano (< ~41 km/h); al superar ~41 km/h entra el peso e inercia centrípeta real
+      const highSpeedRatio = Math.max(0, Math.min(1, (speedMag - 11.4) / 5.4));
+      const agileTurn = Math.max(1.45, 2.25 - speedMag * 0.06);
+      const fastLimitTurn = 11.2 / Math.max(11.4, speedMag); // ~0.98 -> ~0.65 rad/s a 62 km/h
+      const maxGripTurnRate = agileTurn * (1 - highSpeedRatio) + fastLimitTurn * highSpeedRatio;
       const reverseSign = preVForward < -0.4 && speedMag > 0.4 ? -1 : 1;
       const desiredTurnRate = isSkidding
-        ? turnInput * (1.42 + Math.abs(bikeState.whipAngle) * 0.48)
-        : turnInput * Math.min(2.15, maxGripTurnRate) * reverseSign;
+        ? turnInput * (1.72 + Math.abs(bikeState.whipAngle) * 0.55)
+        : turnInput * maxGripTurnRate * reverseSign;
 
       bikeState.turnRateVel +=
-        (desiredTurnRate - bikeState.turnRateVel) * Math.min(1, dt * (isSkidding ? 12.0 : 7.0));
+        (desiredTurnRate - bikeState.turnRateVel) * Math.min(1, dt * (isSkidding ? 15.0 : 12.0));
       freeState.yaw += bikeState.turnRateVel * dt;
 
       const nextDirX = -Math.sin(freeState.yaw);
