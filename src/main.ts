@@ -62,16 +62,31 @@ async function initApp(): Promise<void> {
   const btnMapSource = document.getElementById('btn-map-source') as HTMLButtonElement | null;
   const btnPois = document.getElementById('btn-pois') as HTMLButtonElement;
 
+  type MapSourceKind = 'slpk' | 'lod2' | 'osm';
   const urlParams = new URLSearchParams(window.location.search);
-  let useLod2Map = urlParams.get('map') !== 'osm';
+  const rawMapParam = urlParams.get('map');
+  let mapSourceKind: MapSourceKind =
+    rawMapParam === 'osm' ? 'osm' : rawMapParam === 'lod2' ? 'lod2' : 'slpk';
 
-  const manifestCache: Partial<Record<'lod2' | 'osm', ChunkManifest>> = {};
-  async function loadMapManifest(kind: 'lod2' | 'osm'): Promise<ChunkManifest> {
+  const manifestCache: Partial<Record<MapSourceKind, ChunkManifest>> = {};
+  const mapSourceLabels: Record<MapSourceKind, string> = {
+    slpk: 'LoD2 3D Real',
+    lod2: 'LoD2 1:1000',
+    osm: 'OSM Base',
+  };
+
+  async function loadMapManifest(kind: MapSourceKind): Promise<ChunkManifest> {
     const cached = manifestCache[kind];
     if (cached) return cached;
-    const url = kind === 'lod2' ? '/data/chunks-lod2/manifest.json' : '/data/chunks/manifest.json';
+    const url =
+      kind === 'slpk'
+        ? '/data/chunks-slpk/manifest.json'
+        : kind === 'lod2'
+          ? '/data/chunks-lod2/manifest.json'
+          : '/data/chunks/manifest.json';
     const res = await fetch(url);
     if (!res.ok) {
+      if (kind === 'slpk') return loadMapManifest('lod2');
       if (kind === 'lod2') return loadMapManifest('osm');
       throw new Error(`No se pudo cargar ${url} (HTTP ${res.status})`);
     }
@@ -81,14 +96,16 @@ async function initApp(): Promise<void> {
   }
 
   // 1. Cargar manifiesto de chunks espaciales + DEM real
-  loadingStatus.textContent = 'Cargando índice espacial LoD2 1:1000 y topografía de Madrid...';
-  let activeManifest = await loadMapManifest(useLod2Map ? 'lod2' : 'osm');
+  loadingStatus.textContent = 'Cargando índice espacial LoD2 3D Real y topografía de Madrid...';
+  let activeManifest = await loadMapManifest(mapSourceKind);
   if (activeManifest === manifestCache.osm) {
-    useLod2Map = false;
+    mapSourceKind = 'osm';
+  } else if (activeManifest === manifestCache.lod2) {
+    mapSourceKind = 'lod2';
   }
   const terrain = new TerrainElevation(activeManifest.dem, 1.0);
   const updateSubtitle = (m: ChunkManifest) => {
-    const tag = useLod2Map ? 'LoD2 1:1000' : 'OSM Base';
+    const tag = mapSourceLabels[mapSourceKind];
     mapSubtitle.textContent =
       `${tag} · ${m.totals.chunks} bloques (${m.meta.chunkSizeM}×${m.meta.chunkSizeM} m) · ` +
       `${m.totals.buildings.toLocaleString('es-ES')} volúmenes · ` +
@@ -96,9 +113,9 @@ async function initApp(): Promise<void> {
   };
   updateSubtitle(activeManifest);
   if (btnMapSource) {
-    btnMapSource.textContent = useLod2Map ? 'Mapa: LoD2 1:1000' : 'Mapa: OSM Base';
-    btnMapSource.classList.toggle('active', useLod2Map);
-    btnMapSource.setAttribute('aria-pressed', String(useLod2Map));
+    btnMapSource.textContent = `Mapa: ${mapSourceLabels[mapSourceKind]}`;
+    btnMapSource.classList.toggle('active', mapSourceKind !== 'osm');
+    btnMapSource.setAttribute('aria-pressed', String(mapSourceKind !== 'osm'));
   }
 
   // 2. Configurar Renderer WebGPU (pixelRatio limitado a 1.5 para fluidez en pantallas Retina)
@@ -495,13 +512,14 @@ async function initApp(): Promise<void> {
   if (btnMapSource) {
     btnMapSource.addEventListener('click', async () => {
       btnMapSource.disabled = true;
-      useLod2Map = !useLod2Map;
+      mapSourceKind =
+        mapSourceKind === 'slpk' ? 'lod2' : mapSourceKind === 'lod2' ? 'osm' : 'slpk';
       try {
-        activeManifest = await loadMapManifest(useLod2Map ? 'lod2' : 'osm');
+        activeManifest = await loadMapManifest(mapSourceKind);
         updateSubtitle(activeManifest);
-        btnMapSource.textContent = useLod2Map ? 'Mapa: LoD2 1:1000' : 'Mapa: OSM Base';
-        btnMapSource.classList.toggle('active', useLod2Map);
-        btnMapSource.setAttribute('aria-pressed', String(useLod2Map));
+        btnMapSource.textContent = `Mapa: ${mapSourceLabels[mapSourceKind]}`;
+        btnMapSource.classList.toggle('active', mapSourceKind !== 'osm');
+        btnMapSource.setAttribute('aria-pressed', String(mapSourceKind !== 'osm'));
         chunkManager.setManifest(activeManifest);
         const fx = cameraMode === 'map' ? mapControls.target.x : freeState.x;
         const fz = cameraMode === 'map' ? mapControls.target.z : freeState.z;

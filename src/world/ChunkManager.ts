@@ -37,7 +37,11 @@ export class ChunkManager {
   private readonly terrain: TerrainElevation;
   private readonly cache = new Map<string, CachedChunk>();
   private readonly inflight = new Map<string, AbortController>();
-  private readonly pendingBuild: { entry: ChunkManifestEntry; payload: ChunkPayload }[] = [];
+  private readonly pendingBuild: {
+    entry: ChunkManifestEntry;
+    payload: ChunkPayload;
+    slpkMeshBuffer?: ArrayBuffer | null;
+  }[] = [];
 
   private readonly visibleRadiusM = 780;
   private readonly warmCacheMaxChunks = 55;
@@ -94,7 +98,12 @@ export class ChunkManager {
       const item = this.pendingBuild.shift()!;
       if (this.cache.has(item.entry.key)) continue;
 
-      const result = buildChunkGroup(item.payload, this.resources, this.terrain);
+      const result = buildChunkGroup(
+        item.payload,
+        this.resources,
+        this.terrain,
+        item.slpkMeshBuffer
+      );
       const centerX = item.entry.cx * chunkSize + halfChunk;
       const centerZ = item.entry.cz * chunkSize + halfChunk;
       const isVis = (centerX - focusX) ** 2 + (centerZ - focusZ) ** 2 <= visibleSq;
@@ -198,15 +207,23 @@ export class ChunkManager {
     const targetManifest = this.manifest;
     this.inflight.set(entry.key, controller);
 
-    fetch(this.resolveChunkUrl(entry), { signal: controller.signal })
-      .then((res) => {
+    const jsonPromise = fetch(this.resolveChunkUrl(entry), { signal: controller.signal }).then(
+      (res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json() as Promise<ChunkPayload>;
-      })
-      .then((payload) => {
+      }
+    );
+    const meshPromise = entry.meshFile
+      ? fetch(entry.meshFile, { signal: controller.signal }).then((res) =>
+          res.ok ? res.arrayBuffer() : null
+        )
+      : Promise.resolve(null);
+
+    Promise.all([jsonPromise, meshPromise])
+      .then(([payload, slpkMeshBuffer]) => {
         this.inflight.delete(entry.key);
         if (this.manifest !== targetManifest) return;
-        this.pendingBuild.push({ entry, payload });
+        this.pendingBuild.push({ entry, payload, slpkMeshBuffer });
       })
       .catch((err) => {
         this.inflight.delete(entry.key);
@@ -234,11 +251,17 @@ export class ChunkManager {
     await Promise.all(
       initial.map(async ({ entry }) => {
         if (this.cache.has(entry.key) || this.manifest !== targetManifest) return;
-        const res = await fetch(this.resolveChunkUrl(entry));
+        const [res, meshRes] = await Promise.all([
+          fetch(this.resolveChunkUrl(entry)),
+          entry.meshFile ? fetch(entry.meshFile) : Promise.resolve(null),
+        ]);
         if (!res.ok || this.manifest !== targetManifest) return;
-        const payload = (await res.json()) as ChunkPayload;
+        const [payload, slpkMeshBuffer] = await Promise.all([
+          res.json() as Promise<ChunkPayload>,
+          meshRes && meshRes.ok ? meshRes.arrayBuffer() : Promise.resolve(null),
+        ]);
         if (this.manifest !== targetManifest || this.cache.has(entry.key)) return;
-        const result = buildChunkGroup(payload, this.resources, this.terrain);
+        const result = buildChunkGroup(payload, this.resources, this.terrain, slpkMeshBuffer);
         result.group.visible = true;
         this.scene.add(result.group);
         this.cache.set(entry.key, {

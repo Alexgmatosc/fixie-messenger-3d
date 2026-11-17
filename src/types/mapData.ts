@@ -64,6 +64,7 @@ export interface ChunkManifestEntry {
   cx: number;
   cz: number;
   file: string;
+  meshFile?: string;
   counts: {
     buildings: number;
     roads: number;

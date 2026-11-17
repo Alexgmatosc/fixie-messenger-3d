@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "fetch-map": "node scripts/fetch-madrid-data.mjs",
     "fetch-lod2": "node scripts/import-madrid-lod2.mjs",
-    "extract-facades": "node scripts/extract-mapillary-facades.mjs"
+    "extract-facades": "node scripts/extract-mapillary-facades.mjs",
+    "convert-slpk": "node scripts/convert-slpk-chunks.mjs",
+    "test": "node --test scripts/convert-slpk-chunks.test.mjs"
   },
   "dependencies": {
     "three": "^0.175.0"

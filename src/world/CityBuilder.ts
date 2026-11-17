@@ -1856,6 +1856,85 @@ function buildBuildingsMesh(
   return mesh;
 }
 
+const SLPK_MAGIC = 0x4b504c53;
+
+function align4(n: number): number {
+  return (n + 3) & ~3;
+}
+
+export function parseSlpkBuildingGeometry(
+  buffer: ArrayBuffer
+): { geometry: THREE.BufferGeometry; buildingCount: number } | null {
+  if (buffer.byteLength < 32) return null;
+  const header = new Uint32Array(buffer, 0, 8);
+  if (header[0] !== SLPK_MAGIC || header[1] !== 1) return null;
+
+  const V = header[2];
+  const I = header[3];
+  const buildingCount = header[4];
+  if (V === 0) return null;
+
+  const off0 = 32;
+  const off1 = off0 + V * 12;
+  const off2 = off1 + V * 12;
+  const off3 = off2 + align4(V * 3);
+  const off4 = off3 + V * 4;
+  const off5 = off4 + V * 4;
+  const off6 = off5 + align4(V);
+  const off7 = off6 + align4(V);
+  if (buffer.byteLength < off7 + I * 4) return null;
+
+  const positions = new Float32Array(buffer, off0, V * 3);
+  const normals = new Float32Array(buffer, off1, V * 3);
+  const colU8 = new Uint8Array(buffer, off2, V * 3);
+  const localHeights = new Float32Array(buffer, off3, V);
+  const topDists = new Float32Array(buffer, off4, V);
+  const rtU8 = new Uint8Array(buffer, off5, V);
+  const wsU8 = new Uint8Array(buffer, off6, V);
+
+  const colors = new Float32Array(V * 3);
+  const inv255 = 1 / 255;
+  for (let i = 0; i < V * 3; i++) {
+    colors[i] = colU8[i] * inv255;
+  }
+
+  const roofTypes = new Float32Array(V);
+  const wallStyles = new Float32Array(V);
+  for (let i = 0; i < V; i++) {
+    roofTypes[i] = rtU8[i];
+    wallStyles[i] = wsU8[i];
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setAttribute('aLocalHeight', new THREE.Float32BufferAttribute(localHeights, 1));
+  geometry.setAttribute('aTopDist', new THREE.Float32BufferAttribute(topDists, 1));
+  geometry.setAttribute('aRoofType', new THREE.Float32BufferAttribute(roofTypes, 1));
+  geometry.setAttribute('aWallStyle', new THREE.Float32BufferAttribute(wallStyles, 1));
+
+  if (I > 0) {
+    const indices = new Uint32Array(buffer, off7, I);
+    geometry.setIndex(new THREE.Uint32BufferAttribute(indices, 1));
+  }
+
+  return { geometry, buildingCount };
+}
+
+export function buildSlpkBuildingsMesh(
+  buffer: ArrayBuffer,
+  material: THREE.Material
+): { mesh: THREE.Mesh; buildingCount: number } | null {
+  const parsed = parseSlpkBuildingGeometry(buffer);
+  if (!parsed) return null;
+  const mesh = new THREE.Mesh(parsed.geometry, material);
+  mesh.name = 'chunk-buildings';
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return { mesh, buildingCount: parsed.buildingCount };
+}
+
 function pointInRingXZ(x: number, z: number, ring: [number, number][]): boolean {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
@@ -2010,7 +2089,8 @@ function buildChunkTrees(
 export function buildChunkGroup(
   data: ChunkPayload,
   resources: SharedCityResources,
-  terrain: TerrainElevation
+  terrain: TerrainElevation,
+  slpkMeshBuffer?: ArrayBuffer | null
 ): ChunkBuildResult {
   const group = new THREE.Group();
   group.name = `chunk_${data.key}`;
@@ -2024,15 +2104,24 @@ export function buildChunkGroup(
   const roads = buildRoadsMesh(data.roads, resources.roadMaterial, terrain);
   if (roads) group.add(roads);
 
-  const buildings = buildBuildingsMesh(data.buildings, resources.buildingMaterial, terrain);
-  if (buildings) group.add(buildings);
+  let buildingsCount = data.buildings.length;
+  if (slpkMeshBuffer) {
+    const slpkBuilt = buildSlpkBuildingsMesh(slpkMeshBuffer, resources.buildingMaterial);
+    if (slpkBuilt) {
+      group.add(slpkBuilt.mesh);
+      buildingsCount = slpkBuilt.buildingCount;
+    }
+  } else {
+    const buildings = buildBuildingsMesh(data.buildings, resources.buildingMaterial, terrain);
+    if (buildings) group.add(buildings);
+  }
 
   const { treesMesh, count: treesCount } = buildChunkTrees(data, resources, terrain);
   if (treesMesh) group.add(treesMesh);
 
   return {
     group,
-    buildingsCount: data.buildings.length,
+    buildingsCount,
     treesCount,
   };
 }
